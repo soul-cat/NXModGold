@@ -1,7 +1,7 @@
-# --- Claude Code 开发工作区（仅本地——绝不推送）---
+# --- Claude Code 开发工作区（仅本地）---
 CLAUDE.md
 .claude/
-docs/
+# docs/ 按用户明确指示纳入版本库（研究结论与决策记录对接手者有价值）
 
 # --- IDE / OS 噪声 ---
 .idea/
@@ -61,3 +61,4 @@ plugin/build/
 plugin/*.elf
 plugin/*.map
 plugin/source/offsets.h
+tests/test_layout

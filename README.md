@@ -93,7 +93,11 @@ hook 运行在游戏主线程上，绝不能因为 overlay 读数据而阻塞。
 | `plugin/source/main.cpp` | 插件入口：模块基址、Build ID 校验、共享内存、hook 安装 |
 | `overlay/source/hud_reader.hpp` | seqlock 读取端 + 坐标换算 |
 | `tools/` | macOS 侧分析流水线 |
-| `tests/` | 宿主机单元测试（不需要 devkitPro） |
+| `overlay/source/hud_layout.hpp` | 血条布局与配色（纯函数，可宿主机测试）|
+| `overlay/source/main.cpp` | Tesla overlay：常驻层、共享内存接入、绘制 |
+| `tests/` | 宿主机单元测试（不需要 devkitPro）|
+| `HANDOFF.md` | **接手文档** —— 坑、不变量、风险、推进顺序 |
+| `docs/` | 研究结论与决策记录 |
 
 ## 快速开始
 
@@ -120,6 +124,7 @@ make -C tests tsan     # ThreadSanitizer（单独一轮）
 | `test_seqlock` | 真线程并发，按写者不变量逐条校验快照一致性 |
 | `test_reloc` | 指令重定位。参考编码来自系统汇编器，再做性质测试 |
 | `test_hookplan` | hook 可安装性判定与拒绝路径 |
+| `test_layout` | 血条布局、淡出、配色、越界防护、共享内存扫描 |
 
 ### 3. 转储游戏（需要主机在手边）
 
@@ -147,7 +152,17 @@ make -C tests tsan     # ThreadSanitizer（单独一轮）
 
 ```bash
 make -C plugin       # 产物是裸 .elf，不是 .nro/.nso
+make -C overlay      # 产物是 .ovl
 ```
+
+overlay 需要**改造版 libtesla** —— 上游 `WerWolv/libtesla` framebuffer 尺寸
+写死 448x720、没有 `setLayerPos()`、无条件画黑底和页脚，做不出常驻 HUD：
+
+```bash
+git clone https://github.com/ppkantorski/libultrahand vendor/libultrahand
+```
+
+`overlay/Makefile` 会检查 `setLayerPos` 符号是否存在，拿错版本会直接报错。
 
 macOS arm64 上 devkitPro 原生包是否原生 arm64 未经确认（官网被 Cloudflare 挡）。
 确定可用的路径是 Docker（`devkitpro/devkita64` 确认有 `linux/arm64` manifest）：
@@ -159,7 +174,8 @@ docker run --rm -v "$PWD:/work" -w /work devkitpro/devkita64:latest make -C plug
 ### 6. 安装
 
 ```
-SD:/SaltySD/plugins/010013C00E930000/sshud.elf
+SD:/SaltySD/plugins/010013C00E930000/sshud.elf      ← 插件
+SD:/switch/.overlays/sshud-overlay.ovl              ← overlay
 ```
 
 注意大小写：`plugins/<TITLEID>/` 用**大写**十六进制（`%016lX`），
@@ -325,8 +341,10 @@ nx-ovlloader 的 applet 堆是 6 MB（`g_appletHeapSize = 0x600000`）：
 | 9 | hook 规划逻辑 | ✅ 6 项测试 |
 | 10 | SaltyNX 插件入口 + hook 安装 | ✅ 已写，**未编译验证**（本机无 devkitPro）|
 | 11 | plugin/Makefile | ✅ 已写，**未编译验证** |
-| 12 | Tesla overlay 渲染 | ⏳ |
-| 13 | 收集物地图标注 | 📋 v2 |
+| 12 | 血条布局逻辑 | ✅ 11 项测试 |
+| 13 | Tesla overlay 渲染 | ✅ 已写，**未编译验证** |
+| 14 | overlay/Makefile | ✅ 已写，**未编译验证** |
+| 15 | 收集物地图标注 | 📋 v2 |
 
 ## 范围说明
 
