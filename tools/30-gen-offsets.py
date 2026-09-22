@@ -17,18 +17,21 @@ dump.cs 的格式（Il2CppDumper 输出）：
     }
 
 用法:
-    ./tools/30-gen-offsets.py                       # 用默认路径
+    ./tools/30-gen-offsets.py
     ./tools/30-gen-offsets.py --dump work/dump.cs --out plugin/source/offsets.h
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import re
 import sys
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-REPO = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 RE_NAMESPACE = re.compile(r"^//\s*Namespace:\s*(\S*)\s*$")
 RE_TYPE = re.compile(
@@ -47,187 +50,245 @@ RE_METHOD = re.compile(r"\b([A-Za-z_][A-Za-z0-9_<>]*)\s*\(")
 
 
 @dataclass
+class MethodEntry:
+    """dump.cs 里的一个方法。rva 为 None 表示 Il2CppDumper 报了 -1（无代码）。"""
+
+    rva: int | None
+    va: int | None
+    signature: str
+
+
+@dataclass
 class TypeInfo:
-  namespace: str
-  name: str
-  fields: dict = dc_field(default_factory=dict)   # field name -> int offset
-  methods: dict = dc_field(default_factory=dict)  # method name -> list[(rva, va, sig)]
+    """dump.cs 里的一个类型。"""
+
+    namespace: str
+    name: str
+    fields: dict[str, int] = field(default_factory=dict)
+    methods: dict[str, list[MethodEntry]] = field(default_factory=dict)
 
 
-def parseDump(path: Path) -> dict:
-  """把 dump.cs 解析成 {(namespace, typename): TypeInfo}。"""
-  types = {}
-  namespace = ""
-  current = None
-  pendingRva = None
-  depth = 0
+def parse_dump(path: Path) -> dict[tuple[str, str], TypeInfo]:
+    """把 dump.cs 解析成 {(namespace, typename): TypeInfo}。"""
+    types: dict[tuple[str, str], TypeInfo] = {}
+    namespace = ""
+    current: TypeInfo | None = None
+    pending_rva: tuple[int | None, int | None] | None = None
+    depth = 0
 
-  with path.open("r", encoding="utf-8", errors="replace") as fh:
-    for raw in fh:
-      line = raw.rstrip("\n")
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for raw_line in handle:
+            line = raw_line.rstrip("\n")
 
-      m = RE_NAMESPACE.match(line)
-      if m:
-        namespace = m.group(1)
-        continue
+            ns_match = RE_NAMESPACE.match(line)
+            if ns_match is not None:
+                namespace = ns_match.group(1)
+                continue
 
-      m = RE_RVA.match(line)
-      if m:
-        rva = None if m.group(1) == "-1" else int(m.group(1), 16)
-        va = int(m.group(3), 16) if m.group(3) else None
-        pendingRva = (rva, va)
-        continue
+            rva_match = RE_RVA.match(line)
+            if rva_match is not None:
+                rva = None if rva_match.group(1) == "-1" else int(rva_match.group(1), 16)
+                va = int(rva_match.group(3), 16) if rva_match.group(3) else None
+                pending_rva = (rva, va)
+                continue
 
-      # 类型声明：注意要排除方法体里的花括号
-      if depth == 0:
-        m = RE_TYPE.match(line)
-        if m and "(" not in line.split("//")[0]:
-          current = TypeInfo(namespace=namespace, name=m.group(1))
-          types[(namespace, current.name)] = current
-          pendingRva = None
-          depth += line.count("{") - line.count("}")
-          continue
+            # 类型声明：排除方法体里带花括号的行
+            if depth == 0:
+                type_match = RE_TYPE.match(line)
+                if type_match is not None and "(" not in line.split("//")[0]:
+                    current = TypeInfo(namespace=namespace, name=type_match.group(1))
+                    types[(namespace, current.name)] = current
+                    pending_rva = None
+                    depth += line.count("{") - line.count("}")
+                    continue
 
-      if current is None:
-        continue
+            if current is None:
+                continue
 
-      depth += line.count("{") - line.count("}")
-      if depth <= 0:
-        # 类型结束
-        if line.strip().startswith("}") and depth == 0:
-          current = None
-          pendingRva = None
-        continue
+            depth += line.count("{") - line.count("}")
+            if depth <= 0:
+                if line.strip().startswith("}") and depth == 0:
+                    current = None
+                    pending_rva = None
+                continue
 
-      m = RE_FIELD.match(line)
-      if m and pendingRva is None:
-        current.fields[m.group(1)] = int(m.group(2), 16)
-        continue
+            field_match = RE_FIELD.match(line)
+            if field_match is not None and pending_rva is None:
+                current.fields[field_match.group(1)] = int(field_match.group(2), 16)
+                continue
 
-      if pendingRva is not None:
-        m = RE_METHOD.search(line.split("//")[0])
-        if m:
-          name = m.group(1)
-          current.methods.setdefault(name, []).append(
-            (pendingRva[0], pendingRva[1], line.strip())
-          )
-        pendingRva = None
+            if pending_rva is not None:
+                method_match = RE_METHOD.search(line.split("//")[0])
+                if method_match is not None:
+                    name = method_match.group(1)
+                    current.methods.setdefault(name, []).append(
+                        MethodEntry(rva=pending_rva[0], va=pending_rva[1], signature=line.strip())
+                    )
+                pending_rva = None
 
-  return types
+    return types
 
 
-def findType(types: dict, name: str, namespace: str | None):
-  """按类型名查找；未指定命名空间时允许唯一匹配。"""
-  if namespace is not None:
-    return types.get((namespace, name))
-  hits = [t for (ns, n), t in types.items() if n == name]
-  if len(hits) == 1:
-    return hits[0]
-  if len(hits) > 1:
-    # 优先全局命名空间（游戏自身代码通常在全局）
-    globals_ = [t for t in hits if t.namespace == ""]
-    if len(globals_) == 1:
-      return globals_[0]
-  return None
+def find_type(
+    types: dict[tuple[str, str], TypeInfo], name: str, namespace: str | None
+) -> TypeInfo | None:
+    """按类型名查找；未指定命名空间时允许唯一匹配，否则优先全局命名空间。"""
+    if namespace is not None:
+        return types.get((namespace, name))
+
+    hits = [info for (_, type_name), info in types.items() if type_name == name]
+    if len(hits) == 1:
+        return hits[0]
+    if len(hits) > 1:
+        # 游戏自身代码通常在全局命名空间
+        global_hits = [info for info in hits if info.namespace == ""]
+        if len(global_hits) == 1:
+            return global_hits[0]
+    return None
+
+
+def _emit_fields(
+    specs: list[dict[str, Any]],
+    types: dict[tuple[str, str], TypeInfo],
+    lines: list[str],
+    missing: list[str],
+) -> None:
+    for spec in specs:
+        info = find_type(types, spec["class"], spec.get("namespace"))
+        offset: int | None = None
+        matched_name: str | None = None
+        if info is not None:
+            for candidate in [spec["field"], *spec.get("aliases", [])]:
+                if candidate in info.fields:
+                    offset, matched_name = info.fields[candidate], candidate
+                    break
+
+        if offset is None:
+            if spec.get("required"):
+                missing.append(spec["name"])
+            else:
+                lines.append(f"// [缺失] {spec['name']}: {spec['class']}.{spec['field']} 未找到")
+            continue
+
+        lines.append(f"#define {spec['name']:<22} 0x{offset:X}   // {spec['class']}.{matched_name}")
+
+
+def _emit_methods(
+    specs: list[dict[str, Any]],
+    types: dict[tuple[str, str], TypeInfo],
+    text_base: int,
+    lines: list[str],
+    missing: list[str],
+) -> None:
+    for spec in specs:
+        info = find_type(types, spec["class"], spec.get("namespace"))
+        entries = info.methods.get(spec["method"], []) if info is not None else []
+        usable = [entry for entry in entries if entry.rva is not None]
+
+        if not usable:
+            note = "RVA 为 -1（无代码，可能被裁剪）" if entries else "未找到"
+            if spec.get("required"):
+                missing.append(f"{spec['name']}（{note}）")
+            else:
+                lines.append(f"// [缺失] {spec['name']}: {spec['class']}.{spec['method']} {note}")
+            continue
+
+        if len(usable) > 1:
+            lines.append(
+                f"// 注意：{spec['class']}.{spec['method']} 有 {len(usable)} 个重载，取第一个"
+            )
+            for entry in usable:
+                lines.append(f"//   RVA 0x{entry.rva:X}  {entry.signature[:90]}")
+
+        chosen = usable[0]
+        assert chosen.rva is not None  # usable 已过滤
+        if chosen.va is not None and text_base:
+            module_offset = chosen.va - text_base
+        else:
+            module_offset = chosen.rva
+        lines.append(
+            f"#define {spec['name']:<22} 0x{module_offset:X}   "
+            f"// {spec['class']}.{spec['method']}"
+        )
+
+
+def build_header(
+    types: dict[tuple[str, str], TypeInfo],
+    targets: dict[str, Any],
+    build_id: str,
+    text_base: int,
+) -> tuple[list[str], list[str]]:
+    """生成 offsets.h 的行，以及缺失的必需符号列表。"""
+    lines = [
+        "// 由 tools/30-gen-offsets.py 自动生成 —— 不要手改。",
+        "// 游戏每次更新后重新运行该脚本。",
+        "//",
+        f"// Build ID  : {build_id or '(未提供)'}",
+        f"// .text base: {hex(text_base)}",
+        "",
+        "#ifndef SS_OFFSETS_H",
+        "#define SS_OFFSETS_H",
+        "",
+        "#include <stdint.h>",
+        "",
+        f'#define SS_BUILD_ID_STR "{build_id}"',
+        "",
+        "// ---------------------------------------------------------------- 字段偏移",
+    ]
+    missing: list[str] = []
+
+    _emit_fields(targets.get("fields", []), types, lines, missing)
+    lines += ["", "// ---------------------------------------------------------------- 方法 RVA"]
+    _emit_methods(targets.get("methods", []), types, text_base, lines, missing)
+    lines += ["", "#endif  // SS_OFFSETS_H", ""]
+
+    return lines, missing
 
 
 def main() -> int:
-  ap = argparse.ArgumentParser(description=__doc__,
-                               formatter_class=argparse.RawDescriptionHelpFormatter)
-  ap.add_argument("--dump", default=str(REPO / "work" / "dump.cs"), help="dump.cs 路径")
-  ap.add_argument("--targets", default=str(REPO / "tools" / "targets.json"))
-  ap.add_argument("--out", default=str(REPO / "plugin" / "source" / "offsets.h"))
-  ap.add_argument("--build-id", default="", help="游戏 Build ID（16 位十六进制）")
-  ap.add_argument("--text-base", default="0x0",
-                  help="NSO .text 段的虚拟地址基准，用于把 VA 换算成模块内偏移")
-  args = ap.parse_args()
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--dump", default=str(REPO_ROOT / "work" / "dump.cs"), help="dump.cs 路径")
+    parser.add_argument("--targets", default=str(REPO_ROOT / "tools" / "targets.json"))
+    parser.add_argument("--out", default=str(REPO_ROOT / "plugin" / "source" / "offsets.h"))
+    parser.add_argument("--build-id", default="", help="游戏 Build ID（16 位十六进制）")
+    parser.add_argument(
+        "--text-base",
+        default="0x0",
+        help="NSO .text 段的虚拟地址基准，用于把 VA 换算成模块内偏移",
+    )
+    args = parser.parse_args()
 
-  dumpPath = Path(args.dump)
-  if not dumpPath.is_file():
-    print(f"[x] 找不到 {dumpPath}", file=sys.stderr)
-    print("    先跑 ./tools/20-dump-il2cpp.sh", file=sys.stderr)
-    return 1
+    dump_path = Path(args.dump)
+    if not dump_path.is_file():
+        print(f"[x] 找不到 {dump_path}", file=sys.stderr)
+        print("    先跑 ./tools/20-dump-il2cpp.sh", file=sys.stderr)
+        return 1
 
-  print(f"[*] 解析 {dumpPath} …")
-  types = parseDump(dumpPath)
-  print(f"    共 {len(types)} 个类型")
+    print(f"[*] 解析 {dump_path} …")
+    types = parse_dump(dump_path)
+    print(f"    共 {len(types)} 个类型")
 
-  targets = json.loads(Path(args.targets).read_text(encoding="utf-8"))
-  textBase = int(args.text_base, 16)
+    targets = json.loads(Path(args.targets).read_text(encoding="utf-8"))
+    text_base = int(args.text_base, 16)
 
-  lines = [
-    "// 由 tools/30-gen-offsets.py 自动生成 —— 不要手改。",
-    "// 游戏每次更新后重新运行该脚本。",
-    "//",
-    f"// Build ID: {args.build_id or '(未提供)'}",
-    f"// .text base: {hex(textBase)}",
-    "",
-    "#ifndef SS_OFFSETS_H",
-    "#define SS_OFFSETS_H",
-    "",
-    "#include <stdint.h>",
-    "",
-    f'#define SS_BUILD_ID_STR "{args.build_id}"',
-    "",
-    "// ---------------------------------------------------------------- 字段偏移",
-  ]
+    lines, missing = build_header(types, targets, args.build_id, text_base)
 
-  missing = []
+    if missing:
+        print("[x] 必需符号缺失：" + ", ".join(missing), file=sys.stderr)
+        print("    检查 tools/targets.json 里的类名/字段名是否与本版本一致：", file=sys.stderr)
+        print(f"      grep -n 'class HealthManager' {dump_path}", file=sys.stderr)
+        return 2
 
-  for spec in targets.get("fields", []):
-    ti = findType(types, spec["class"], spec.get("namespace"))
-    val = None
-    used = None
-    if ti:
-      for cand in [spec["field"]] + spec.get("aliases", []):
-        if cand in ti.fields:
-          val, used = ti.fields[cand], cand
-          break
-    if val is None:
-      (missing if spec.get("required") else lines).append(
-        spec["name"] if spec.get("required")
-        else f"// [缺失] {spec['name']}: {spec['class']}.{spec['field']} 未找到")
-      if not spec.get("required"):
-        continue
-    else:
-      lines.append(f"#define {spec['name']:<22} 0x{val:X}   // {spec['class']}.{used}")
-
-  lines += ["", "// ---------------------------------------------------------------- 方法 RVA"]
-
-  for spec in targets.get("methods", []):
-    ti = findType(types, spec["class"], spec.get("namespace"))
-    entries = ti.methods.get(spec["method"], []) if ti else []
-    entries = [e for e in entries if e[0] is not None]
-    if not entries:
-      if spec.get("required"):
-        missing.append(spec["name"])
-      else:
-        lines.append(f"// [缺失] {spec['name']}: {spec['class']}.{spec['method']} 未找到")
-      continue
-    if len(entries) > 1:
-      lines.append(f"// 注意：{spec['class']}.{spec['method']} 有 {len(entries)} 个重载，取第一个")
-      for rva, va, sig in entries:
-        lines.append(f"//   RVA 0x{rva:X}  {sig[:90]}")
-    rva, va, sig = entries[0]
-    off = (va - textBase) if (va is not None and textBase) else rva
-    lines.append(f"#define {spec['name']:<22} 0x{off:X}   // {spec['class']}.{spec['method']}")
-
-  lines += ["", "#endif  // SS_OFFSETS_H", ""]
-
-  if missing:
-    print("[x] 必需符号缺失：" + ", ".join(missing), file=sys.stderr)
-    print("    检查 tools/targets.json 里的类名/字段名是否与本版本一致。", file=sys.stderr)
-    print("    可用以下命令自查：", file=sys.stderr)
-    print(f"      grep -n 'class HealthManager' {dumpPath}", file=sys.stderr)
-    return 2
-
-  outPath = Path(args.out)
-  outPath.parent.mkdir(parents=True, exist_ok=True)
-  outPath.write_text("\n".join(lines), encoding="utf-8")
-  print(f"[✓] 已写入 {outPath}")
-  print(f"    {sum(1 for l in lines if l.startswith('#define'))} 个符号")
-  return 0
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    define_count = sum(1 for line in lines if line.startswith("#define"))
+    print(f"[✓] 已写入 {out_path}")
+    print(f"    {define_count} 个符号")
+    return 0
 
 
 if __name__ == "__main__":
-  sys.exit(main())
+    sys.exit(main())
