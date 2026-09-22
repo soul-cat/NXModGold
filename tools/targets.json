@@ -1,0 +1,23 @@
+{
+  "_comment": "需要从 dump.cs 中提取的符号。改游戏版本时不用改这里，只要类/字段名没变。",
+  "fields": [
+    { "name": "HM_HP",          "class": "HealthManager", "field": "hp",          "required": true },
+    { "name": "HM_MAXHP",       "class": "HealthManager", "field": "maxHP",       "required": false,
+      "aliases": ["maxHp", "MaxHP", "initHp", "initHP"] },
+    { "name": "HM_ISDEAD",      "class": "HealthManager", "field": "isDead",      "required": false },
+    { "name": "HM_INVINCIBLE",  "class": "HealthManager", "field": "invincible",  "required": false },
+    { "name": "HIT_DAMAGEDEALT","class": "HitInstance",   "field": "DamageDealt", "required": false,
+      "aliases": ["damageDealt"] },
+    { "name": "OBJ_CACHEDPTR",  "class": "Object",        "field": "m_CachedPtr", "required": false,
+      "namespace": "UnityEngine" }
+  ],
+  "methods": [
+    { "name": "HM_TAKEDAMAGE",  "class": "HealthManager", "method": "TakeDamage",  "required": true },
+    { "name": "HM_DIE",         "class": "HealthManager", "method": "Die",         "required": false },
+    { "name": "HM_START",       "class": "HealthManager", "method": "Start",       "required": false },
+    { "name": "COMP_GETGAMEOBJ","class": "Component",     "method": "get_gameObject", "required": false,
+      "namespace": "UnityEngine" },
+    { "name": "OBJ_GETNAME",    "class": "Object",        "method": "get_name",    "required": false,
+      "namespace": "UnityEngine" }
+  ]
+}
