@@ -56,3 +56,8 @@ tests/*.dSYM/
 tests/test_seqlock
 tests/test_seqlock_tsan
 tests/test_reloc
+tests/test_hookplan
+plugin/build/
+plugin/*.elf
+plugin/*.map
+plugin/source/offsets.h

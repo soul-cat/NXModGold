@@ -39,6 +39,31 @@ Atmosphère 的金手指 VM 也做不到：它只能读写内存，**没有任�
        └─ 读 SharedMemory → libtesla 绘制血条与伤害数字
 ```
 
+### SaltyNX 的三个硬约束
+
+| 约束 | 出处 | 我们的应对 |
+|---|---|---|
+| 不提供内联 hook | 全仓库 grep "hook" 零命中 | 自己写指令重定位器（`arm64_reloc.hpp`）|
+| 拿不到 RWX | 内核只给 R/RW/RX；`svcCreateCodeMemory` 零售 NPDM 里没有 | trampoline 池放在插件自己的 `.text`，用 `SaltySD_Memcpy` 绕页权限写入 |
+| `SaltySD_Memcpy` 只在 `main()` 期间可用 | Core 在 `LoadPlugins()`(`main.c:466`) 后立刻 `SaltySD_Deinit()`(`:496`) | 所有 hook 在入口一次装完 |
+
+⚠️ `SaltySDCore_getCodeStart()` 返回的是 **rtld，不是 main**。拿 main 基址只能用
+NX-FPS 的启发式走法（`getCodeStart() + 0x4000` 后 `svcQueryMemory` 扫最多 3 个区域）。
+不是 API 契约，但整个零售游戏库都这么用。
+
+### 时序：`main()` 跑在游戏执行任何自身代码之前
+
+```
+Core main():
+  :466  SaltySDCore_LoadPlugins()   ← 插件 main() 在此
+  :496  SaltySD_Deinit()
+  ...   __libnx_exit(0) → rtld → 游戏启动
+```
+
+此时 **IL2CPP 尚未初始化**。对我们无害 —— 我们只写指令字节，NSO 已映射且
+`.text` 内容已最终确定（重定位只动 `.data`/`.got`）；hook 在游戏后来调用
+`TakeDamage` 时才触发，且 hook 体只按固定偏移读字段，不碰 IL2CPP 运行时。
+
 ### 三个关键设计决策
 
 **1. 归一化屏幕坐标 `[0,1]`**
@@ -63,6 +88,9 @@ hook 运行在游戏主线程上，绝不能因为 overlay 读数据而阻塞。
 |------|------|
 | `shared/hud_protocol.h` | 插件 ↔ overlay 共享内存协议。**两边必须同步改** |
 | `plugin/source/tracker.hpp` | 敌人状态追踪器。定长 24 槽，无分配，LRU + TTL 双重淘汰 |
+| `plugin/source/arm64_reloc.hpp` | ARM64 指令重定位。宁可拒绝也不生成半对的代码 |
+| `plugin/source/hook_pool.hpp` | hook 规划（纯函数，可宿主机测试）+ trampoline 池布局 |
+| `plugin/source/main.cpp` | 插件入口：模块基址、Build ID 校验、共享内存、hook 安装 |
 | `overlay/source/hud_reader.hpp` | seqlock 读取端 + 坐标换算 |
 | `tools/` | macOS 侧分析流水线 |
 | `tests/` | 宿主机单元测试（不需要 devkitPro） |
@@ -81,10 +109,17 @@ devkitPro 需要 sudo，脚本会打印命令让你手动执行。
 ### 2. 跑测试（不需要游戏转储，随时可跑）
 
 ```bash
-make -C tests test     # ASan + UBSan
+make -C tests test     # 4 个测试二进制，ASan + UBSan
 make -C tests tsan     # ThreadSanitizer（单独一轮）
 ./tools/nsotool.py selftest
 ```
+
+| 测试 | 覆盖 |
+|---|---|
+| `test_tracker` | 槽位管理、TTL/LRU 淘汰、maxHp 推断、边界防护 |
+| `test_seqlock` | 真线程并发，按写者不变量逐条校验快照一致性 |
+| `test_reloc` | 指令重定位。参考编码来自系统汇编器，再做性质测试 |
+| `test_hookplan` | hook 可安装性判定与拒绝路径 |
 
 ### 3. 转储游戏（需要主机在手边）
 
@@ -111,9 +146,27 @@ make -C tests tsan     # ThreadSanitizer（单独一轮）
 ### 5. 编译
 
 ```bash
-make -C plugin
-make -C overlay
+make -C plugin       # 产物是裸 .elf，不是 .nro/.nso
 ```
+
+macOS arm64 上 devkitPro 原生包是否原生 arm64 未经确认（官网被 Cloudflare 挡）。
+确定可用的路径是 Docker（`devkitpro/devkita64` 确认有 `linux/arm64` manifest）：
+
+```bash
+docker run --rm -v "$PWD:/work" -w /work devkitpro/devkita64:latest make -C plugin
+```
+
+### 6. 安装
+
+```
+SD:/SaltySD/plugins/010013C00E930000/sshud.elf
+```
+
+注意大小写：`plugins/<TITLEID>/` 用**大写**十六进制（`%016lX`），
+而 `patches/<titleid>/` 用小写。别弄混。
+
+需要 SaltyNX **≥ 1.7.3** —— 1.5.0 才修好 Unity 6 兼容性（更新日志点名
+Hollow Knight Silksong），1.7.3 正式修了 Unity 6 依赖的 `GetAllModuleInfo`。
 
 ## 工具说明
 
@@ -268,10 +321,12 @@ nx-ovlloader 的 applet 堆是 6 MB（`g_appletHeapSize = 0x600000`）：
 | 5 | 偏移生成器 | ✅ fixture + 2 条失败路径验证 |
 | 6 | IL2CPP dump 流水线 | ✅ 脚本就绪，待转储输入 |
 | 7 | 游戏转储 | ⏸ 需要主机在手边 |
-| 8 | SaltyNX 插件骨架 | ⏳ |
-| 9 | TakeDamage hook | ⏳ |
-| 10 | Tesla overlay 渲染 | ⏳ |
-| 11 | 收集物地图标注 | 📋 v2 |
+| 8 | ARM64 指令重定位器 | ✅ 4 万余条性质验证 |
+| 9 | hook 规划逻辑 | ✅ 6 项测试 |
+| 10 | SaltyNX 插件入口 + hook 安装 | ✅ 已写，**未编译验证**（本机无 devkitPro）|
+| 11 | plugin/Makefile | ✅ 已写，**未编译验证** |
+| 12 | Tesla overlay 渲染 | ⏳ |
+| 13 | 收集物地图标注 | 📋 v2 |
 
 ## 范围说明
 
