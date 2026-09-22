@@ -18,10 +18,16 @@ extern "C" {
 #define SSHUD_VERSION       1u
 
 // 同屏最多追踪的敌人数量。超出的按"最近受击"淘汰。
-#define SSHUD_MAX_ENTITIES  24
+//
+// 为什么是 8 而不是更多：SaltyNX 的 SharedMemory 一共只有 0x1000 字节，
+// 且由所有插件共用（NX-FPS 占 174 字节）。我们按需申请一段，
+// 8 个槽位 = 48 + 8*48 = 432 字节，约占总量 10%，是个讲道理的数字。
+// 何况屏幕固定血条列超过 8 条本来也没法看。
+#define SSHUD_MAX_ENTITIES  8
 
-// 共享内存总大小（SaltyNX SharedMemory 中为本项目预留的区段）
-#define SSHUD_BLOCK_SIZE    4096
+// SaltyNX SharedMemory 的总大小。我们只申请其中一小段，
+// 偏移由 SaltySD_CheckIfSharedMemoryAvailable() 返回。
+#define SSHUD_SHMEM_TOTAL   0x1000
 
 // SsHudEntity.flags 位定义
 #define SSHUD_FLAG_ALIVE      (1u << 0)  // HealthManager 仍然有效
@@ -43,7 +49,10 @@ typedef struct {
   uint32_t reserved;
 } SsHudEntity;
 
-/// 共享内存主块
+/// 共享内存主块。
+///
+/// 布局约定（与 NX-FPS 一致）：magic 必须是本结构的第一个 4 字节字段，
+/// overlay 侧以 4 字节步长扫描整个 0x1000 区域来定位我们的块。
 typedef struct {
   uint32_t    magic;          // SSHUD_MAGIC，overlay 用它确认插件已就绪
   uint32_t    version;        // SSHUD_VERSION，不匹配时 overlay 拒绝读取
@@ -61,6 +70,10 @@ typedef struct {
 #define SSHUD_HOOK_BUILDID_OK   (1u << 1)  // Build ID 与 offsets.h 匹配
 #define SSHUD_HOOK_TAKEDAMAGE   (1u << 2)  // TakeDamage hook 已安装
 #define SSHUD_HOOK_CAMERA       (1u << 3)  // 相机参数可读，坐标换算可用
+
+/// 本块实际占用的字节数，申请共享内存时传给
+/// SaltySD_CheckIfSharedMemoryAvailable()。必须 4 字节对齐（该 API 的要求）。
+#define SSHUD_BLOCK_SIZE    ((int32_t)sizeof(SsHudBlock))
 
 /// FNV-1a 32 位哈希 —— 插件和 overlay 必须用同一个实现
 static inline uint32_t sshudHashName(const char* s) {

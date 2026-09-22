@@ -55,3 +55,4 @@ tests/test_tracker
 tests/*.dSYM/
 tests/test_seqlock
 tests/test_seqlock_tsan
+tests/test_reloc
