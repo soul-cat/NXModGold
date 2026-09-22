@@ -62,6 +62,8 @@ d=open(sys.argv[1],'rb').read(8)
 print('magic=%s version=%d' % (d[:4].hex().upper(), struct.unpack_from('<I',d,4)[0]))
 " "$WORK/global-metadata.dat")"
   printf "  %s%s%s\n" "$DIM" "$VER" "$RST"
+  printf "  %s期望 magic=BAF11BFA version=31（Unity 6000.0.x）%s\n" "$DIM" "$RST"
+  printf "  %s若 version >= 35，上游 Il2CppDumper 不支持，需要换分支%s\n" "$DIM" "$RST"
 else
   warn "没找到 global-metadata.dat。"
   warn "它在 RomFS 里，路径类似 Data/il2cpp_data/Metadata/global-metadata.dat"

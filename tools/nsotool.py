@@ -35,6 +35,10 @@ OFF_CSIZE_DATA = 0x68
 FLAG_TEXT_COMPRESSED = 1 << 0
 FLAG_RODATA_COMPRESSED = 1 << 1
 FLAG_DATA_COMPRESSED = 1 << 2
+# bit 3-5 是各段的 hash 校验开关。
+# bit 7 = UseZbicCompression：段用 zstd 而非 LZ4（见 switchbrew.org/wiki/NSO）。
+# 我们只实现了 LZ4；遇到这个标志必须明确报错，否则会解出一堆垃圾。
+FLAG_ZBIC_COMPRESSION = 1 << 7
 
 
 def lz4BlockDecompress(src: bytes, expectedSize: int) -> bytearray:
@@ -119,6 +123,11 @@ class Nso:
                        "如果这是 NCA/NSP，先用 hactool 解出 exefs。")
     self.data = data
     self.flags = struct.unpack_from("<I", data, OFF_FLAGS)[0]
+    if self.flags & FLAG_ZBIC_COMPRESSION:
+      raise ValueError(
+        "该 NSO 使用 zstd (UseZbicCompression) 压缩，本工具只实现了 LZ4。\n"
+        "    用 nstool 先解压：nstool --raw --part0 <out> main\n"
+        "    （jakcron/nstool 有 macOS arm64 预编译版）")
     self.buildId = data[OFF_BUILD_ID:OFF_BUILD_ID + 32]
     self.bssSize = struct.unpack_from("<I", data, OFF_BSS_SIZE)[0]
 
@@ -231,7 +240,22 @@ def cmdSelftest(args):
   except ValueError:
     print("  ok   大小不符时报错")
 
-  # 向量 6: 非法 offset 应当报错
+  # 向量 6b: zstd 标志应当被拒绝
+  hdr = bytearray(0x100)
+  hdr[0:4] = b"NSO0"
+  struct.pack_into("<I", hdr, OFF_FLAGS, FLAG_ZBIC_COMPRESSION)
+  try:
+    Nso(bytes(hdr))
+    print("  FAIL zstd 标志未被拒绝")
+    failures += 1
+  except ValueError as e:
+    if "zstd" in str(e):
+      print("  ok   zstd 压缩标志被拒绝")
+    else:
+      print(f"  FAIL 报错原因不对: {e}")
+      failures += 1
+
+  # 向量 7: 非法 offset 应当报错
   try:
     lz4BlockDecompress(bytes([0x00]) + bytes([0x00, 0x00]), 0)
     print("  FAIL 非法 offset 未触发")

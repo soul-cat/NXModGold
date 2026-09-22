@@ -65,8 +65,10 @@ clone_or_pull() {
   fi
 }
 
-# Il2CppDumper —— Unity 6000 / metadata v35-v39 分支
-clone_or_pull https://github.com/Doppelglower/Il2CppDumper.git Il2CppDumper
+# Il2CppDumper —— 用上游。Silksong 是 Unity 6000.0.50f1 → metadata v31，
+# 上游 v6.7.46 支持 v16-v31，覆盖我们的目标。
+# （v35-v39 的第三方分支是给 Unity 6000.3+ 的，我们用不上。）
+clone_or_pull https://github.com/Perfare/Il2CppDumper.git Il2CppDumper
 # ARM64 内联 hook —— 处理 PC 相对指令重定位，插件直接用
 clone_or_pull https://github.com/kyuuseiryuu/And64InlineHook.git And64InlineHook || \
   warn "And64InlineHook 克隆失败，稍后手动处理（见 docs/tasks/）"
