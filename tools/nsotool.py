@@ -164,7 +164,9 @@ class Nso:
         if self.flags & FLAG_ZBIC_COMPRESSION:
             raise NsoError(
                 "该 NSO 使用 zstd (UseZbicCompression) 压缩，本工具只实现了 LZ4。\n"
-                "    用 nstool 先解压（jakcron/nstool 有 macOS arm64 预编译版）"
+                "    注意：Il2CppDumper 与 Il2CppInspectorRedux 同样只实现 LZ4，\n"
+                "    所以这个标志一旦出现，整条流水线都会卡住，不只是本工具。\n"
+                "    目前 macOS arm64 上没有已验证的现成解压方案。"
             )
         self.build_id: bytes = data[OFF_BUILD_ID : OFF_BUILD_ID + BUILD_ID_SIZE]
         self.bss_size: int = struct.unpack_from("<I", data, OFF_BSS_SIZE)[0]
@@ -200,10 +202,24 @@ class Nso:
             return bytearray(raw)
         return lz4_block_decompress(raw, segment.decomp_size)
 
+    @property
+    def image_size(self) -> int:
+        """模块占用的完整地址空间大小，含 .bss 尾部。
+
+        RVA 的合法范围就是 [0, image_size)。.data 之后的 .bss 区域同样可以被
+        RVA 指到（例如金手指常用的 codecave），所以不能只算到 .data 结尾。
+        """
+        data_end = self.data_seg.mem_off + self.data_seg.decomp_size
+        segments_end = max(s.mem_off + s.decomp_size for s in self.segments)
+        return max(segments_end, data_end + self.bss_size)
+
     def flat_image(self) -> bytearray:
-        """按 mem_off 铺成扁平镜像，基准为 0。反汇编器加载时用 0 作为 image base。"""
-        end = max(s.mem_off + s.decomp_size for s in self.segments)
-        image = bytearray(end)
+        """按 mem_off 铺成扁平镜像，基准为 0，.bss 以零填充。
+
+        基准 0 即模块加载基址，与 Il2CppDumper 对 NSO 报的 RVA 同一坐标系，
+        所以 image[rva] 对任意合法 RVA 都成立。
+        """
+        image = bytearray(self.image_size)
         for segment in self.segments:
             image[segment.mem_off : segment.mem_off + segment.decomp_size] = self.segment_bytes(
                 segment
@@ -225,13 +241,20 @@ def cmd_info(args: argparse.Namespace) -> int:
     print("段布局:")
     for segment in nso.segments:
         print(f"  {segment}")
+    print(f"镜像大小(含 .bss)   : 0x{nso.image_size:X}")
     print()
-    print("RVA 换算（待 Il2CppDumper 输出后用实际值复核）:")
-    print(f"  .text mem_off = 0x{nso.text.mem_off:X}")
-    if nso.text.mem_off == 0:
-        print("  mem_off 为 0，RVA 可直接当作模块基址的偏移使用。")
-    else:
-        print(f"  mem_off 非 0，需确认 RVA 是否已包含它（差值 0x{nso.text.mem_off:X}）。")
+    print("RVA 换算:")
+    print("  运行时地址 = 模块基址 + RVA          ← 不减任何东西")
+    print()
+    print("  Il2CppDumper 对 NSO 报的 RVA 锚定在【模块加载基址】，而非 .text 的")
+    print("  mem_off。Il2Cpp.GetRVA 默认是恒等函数，NSO.cs 没有覆写它（PE 减")
+    print("  ImageBase、Macho64 减 vmaddr，NSO 不减）。NSO 的 mem_off 字段本身就")
+    print("  定义了一个以模块基址为原点、横跨 text/rodata/data/bss 的连续地址空间。")
+    print(f"  因此 .text mem_off (0x{nso.text.mem_off:X}) 只用于判断段归属，绝不参与地址运算。")
+    print()
+    print("  合法 RVA 范围: [0, 0x%X)" % nso.image_size)
+    print("  Ghidra 地址 (Adubbz Switch Loader) = 0x7100000000 + RVA")
+    print("  Atmosphère 金手指 region M=0 的偏移 = RVA（同一坐标系，无需换算）")
     return 0
 
 
@@ -258,6 +281,29 @@ def _make_header(flags: int) -> bytes:
     header[0:4] = NSO_MAGIC
     struct.pack_into("<I", header, OFF_FLAGS, flags)
     return bytes(header)
+
+
+def _make_uncompressed_nso(
+    text: bytes, rodata: bytes, data: bytes, bss_size: int, build_id: bytes
+) -> bytes:
+    """构造一个三段未压缩的合法 NSO，供自检使用。"""
+    header = bytearray(0x100)
+    header[0:4] = NSO_MAGIC
+    struct.pack_into("<I", header, OFF_FLAGS, 0)  # 无压缩
+
+    text_off = 0x100
+    rodata_off = text_off + len(text)
+    data_off = rodata_off + len(rodata)
+
+    # (file_off, mem_off, decompressed_size) —— mem_off 连续排布
+    struct.pack_into("<III", header, OFF_SEG_TEXT, text_off, 0, len(text))
+    struct.pack_into("<III", header, OFF_SEG_RODATA, rodata_off, len(text), len(rodata))
+    struct.pack_into(
+        "<III", header, OFF_SEG_DATA, data_off, len(text) + len(rodata), len(data)
+    )
+    struct.pack_into("<I", header, OFF_BSS_SIZE, bss_size)
+    header[OFF_BUILD_ID : OFF_BUILD_ID + len(build_id)] = build_id
+    return bytes(header) + text + rodata + data
 
 
 def cmd_selftest(_args: argparse.Namespace) -> int:
@@ -313,6 +359,27 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
     )
     expect_error("zstd 压缩标志被拒绝", lambda: Nso(_make_header(FLAG_ZBIC_COMPRESSION)), "zstd")
     expect_error("非 NSO0 magic 被拒绝", lambda: Nso(b"ELF\x7f" + bytes(0x100)), "不是 NSO0")
+
+    # --- 整体解析 + .bss 处理 ---
+    build_id = bytes.fromhex("FC9EA4CCC955D579") + bytes(24)
+    nso = Nso(
+        _make_uncompressed_nso(
+            text=b"\xaa" * 0x40, rodata=b"\xbb" * 0x20, data=b"\xcc" * 0x10,
+            bss_size=0x30, build_id=build_id,
+        )
+    )
+    check("Build ID 解析", nso.build_id_hex(), "FC9EA4CCC955D579")
+    check("段大小解析", [s.decomp_size for s in nso.segments], [0x40, 0x20, 0x10])
+    check("mem_off 连续", [s.mem_off for s in nso.segments], [0x00, 0x40, 0x60])
+    # image_size 必须把 .bss 算进去：0x60 + 0x10 + 0x30 = 0xA0
+    check("image_size 含 .bss", nso.image_size, 0xA0)
+
+    image = nso.flat_image()
+    check("扁平镜像长度", len(image), 0xA0)
+    check("镜像 .text 内容", bytes(image[0x00:0x40]), b"\xaa" * 0x40)
+    check("镜像 .rodata 内容", bytes(image[0x40:0x60]), b"\xbb" * 0x20)
+    check("镜像 .data 内容", bytes(image[0x60:0x70]), b"\xcc" * 0x10)
+    check("镜像 .bss 零填充", bytes(image[0x70:0xA0]), bytes(0x30))
 
     print()
     if failures:

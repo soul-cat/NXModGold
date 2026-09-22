@@ -176,17 +176,25 @@ def _emit_fields(
 def _emit_methods(
     specs: list[dict[str, Any]],
     types: dict[tuple[str, str], TypeInfo],
-    text_base: int,
+    image_size: int,
     lines: list[str],
     missing: list[str],
 ) -> None:
+    """写出方法 RVA。
+
+    RVA 直接使用，不做任何换算：Il2CppDumper 对 NSO 报的 RVA 锚定在模块加载基址
+    （`Il2Cpp.GetRVA` 默认恒等，`NSO.cs` 未覆写），运行时地址就是 `模块基址 + RVA`。
+    """
     for spec in specs:
         info = find_type(types, spec["class"], spec.get("namespace"))
         entries = info.methods.get(spec["method"], []) if info is not None else []
         usable = [entry for entry in entries if entry.rva is not None]
 
         if not usable:
-            note = "RVA 为 -1（无代码，可能被裁剪）" if entries else "未找到"
+            if entries:
+                note = "RVA 为 -1（无代码：抽象/泛型/已裁剪）；可改用 vtable slot 解析"
+            else:
+                note = "未找到"
             if spec.get("required"):
                 missing.append(f"{spec['name']}（{note}）")
             else:
@@ -198,17 +206,17 @@ def _emit_methods(
                 f"// 注意：{spec['class']}.{spec['method']} 有 {len(usable)} 个重载，取第一个"
             )
             for entry in usable:
-                lines.append(f"//   RVA 0x{entry.rva:X}  {entry.signature[:90]}")
+                lines.append(f"//   RVA 0x{entry.rva:X}  {entry.signature[:88]}")
 
         chosen = usable[0]
         assert chosen.rva is not None  # usable 已过滤
-        if chosen.va is not None and text_base:
-            module_offset = chosen.va - text_base
-        else:
-            module_offset = chosen.rva
+        if image_size and not 0 <= chosen.rva < image_size:
+            missing.append(
+                f"{spec['name']}（RVA 0x{chosen.rva:X} 超出镜像范围 0x{image_size:X}）"
+            )
+            continue
         lines.append(
-            f"#define {spec['name']:<22} 0x{module_offset:X}   "
-            f"// {spec['class']}.{spec['method']}"
+            f"#define {spec['name']:<22} 0x{chosen.rva:X}   // {spec['class']}.{spec['method']}"
         )
 
 
@@ -216,7 +224,7 @@ def build_header(
     types: dict[tuple[str, str], TypeInfo],
     targets: dict[str, Any],
     build_id: str,
-    text_base: int,
+    image_size: int,
 ) -> tuple[list[str], list[str]]:
     """生成 offsets.h 的行，以及缺失的必需符号列表。"""
     lines = [
@@ -224,7 +232,10 @@ def build_header(
         "// 游戏每次更新后重新运行该脚本。",
         "//",
         f"// Build ID  : {build_id or '(未提供)'}",
-        f"// .text base: {hex(text_base)}",
+        "//",
+        "// 地址换算：运行时地址 = 模块基址 + RVA（不减任何东西）。",
+        "// Il2CppDumper 对 NSO 报的 RVA 锚定在模块加载基址，",
+        "// 不是 .text 的 mem_off —— GetRVA 默认恒等，NSO.cs 未覆写。",
         "",
         "#ifndef SS_OFFSETS_H",
         "#define SS_OFFSETS_H",
@@ -239,7 +250,7 @@ def build_header(
 
     _emit_fields(targets.get("fields", []), types, lines, missing)
     lines += ["", "// ---------------------------------------------------------------- 方法 RVA"]
-    _emit_methods(targets.get("methods", []), types, text_base, lines, missing)
+    _emit_methods(targets.get("methods", []), types, image_size, lines, missing)
     lines += ["", "#endif  // SS_OFFSETS_H", ""]
 
     return lines, missing
@@ -254,9 +265,10 @@ def main() -> int:
     parser.add_argument("--out", default=str(REPO_ROOT / "plugin" / "source" / "offsets.h"))
     parser.add_argument("--build-id", default="", help="游戏 Build ID（16 位十六进制）")
     parser.add_argument(
-        "--text-base",
-        default="0x0",
-        help="NSO .text 段的虚拟地址基准，用于把 VA 换算成模块内偏移",
+        "--image-size",
+        default="0",
+        help="模块镜像大小（含 .bss），用于校验 RVA 在合法范围内。"
+        "取自 `nsotool.py info` 的『镜像大小』一行。传 0 跳过校验",
     )
     args = parser.parse_args()
 
@@ -271,9 +283,9 @@ def main() -> int:
     print(f"    共 {len(types)} 个类型")
 
     targets = json.loads(Path(args.targets).read_text(encoding="utf-8"))
-    text_base = int(args.text_base, 16)
+    image_size = int(args.image_size, 0)
 
-    lines, missing = build_header(types, targets, args.build_id, text_base)
+    lines, missing = build_header(types, targets, args.build_id, image_size)
 
     if missing:
         print("[x] 必需符号缺失：" + ", ".join(missing), file=sys.stderr)

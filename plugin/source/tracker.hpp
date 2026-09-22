@@ -45,6 +45,7 @@ class EntityTracker {
   }
 
   /// 敌人受击时调用。objectId 用 IL2CPP 对象指针，只作身份比对，绝不解引用。
+  /// maxHp 传 HealthManager.initHp 的值；传 <=0 表示读不到，走推断路径。
   void onDamage(uint64_t objectId, int32_t hp, int32_t maxHp,
                 int32_t damage, uint32_t nameHash, uint64_t nowTick) {
     if (objectId == 0) return;
@@ -54,8 +55,10 @@ class EntityTracker {
     if (!s) return;
 
     if (s->e.objectId != objectId) {
-      // 新条目：初始化 maxHp。有些敌人拿不到 maxHP 字段，
-      // 此时用首次观测到的 hp + 本次伤害作为上限估计。
+      // 新条目：初始化 maxHp。正常情况从 HealthManager.initHp 读取
+      // （Silksong 没有 maxHP 这个字段，最大血量存在 initHp 里）。
+      // 读不到时退化为「首次观测 hp + 本次伤害」，这也是 PC 版
+      // ShowDamage HealthBar 用的办法（它压根没读 initHp）。
       memset(&s->e, 0, sizeof(s->e));
       s->e.objectId = objectId;
       s->e.maxHp = maxHp > 0 ? maxHp : (hp + damage);

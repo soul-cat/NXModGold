@@ -31,7 +31,7 @@ Atmosphère 的金手指 VM 也做不到：它只能读写内存，**没有任�
 ┌─ 游戏进程 (Silksong, main NSO)
 │    [plugin/]  SaltyNX 插件，ARM64 原生代码
 │      ├─ 内联 hook HealthManager::TakeDamage
-│      ├─ 读取 hp / maxHp / 伤害值
+│      ├─ 读取 hp / initHp / DamageDealt
 │      └─ seqlock 写入 SharedMemory（无锁，绝不阻塞游戏主线程）
 │                    │
 │                    ▼  SaltyNX SharedMemory
@@ -128,19 +128,50 @@ make -C overlay
 ./tools/nsotool.py selftest                   # LZ4 解压器自检
 ```
 
-内置 LZ4 块解压器，附 8 个手工构造的测试向量。
+内置 LZ4 块解压器与 NSO 头部解析，附 17 个手工构造的测试向量
+（含重叠匹配、255 续位长度编码、.bss 零填充、4 条错误路径）。
 会检测 NSO flags bit 7（`UseZbicCompression`，zstd 而非 LZ4）并明确报错，
 而不是静默解出垃圾数据。
 
 ### `tools/30-gen-offsets.py`
 
 从 `dump.cs` 提取符号。要抓什么在 `tools/targets.json` 里配置，
-支持字段别名（`maxHP` / `maxHp` / `MaxHP` 都试）、命名空间消歧、重载检测。
+支持字段别名、命名空间消歧、重载检测，并用 `--image-size` 校验
+RVA 落在合法范围内。
 
 必需符号缺失时以 exit code 2 失败并打印自查命令 —— 包括
 Il2CppDumper 报 `RVA: -1`（方法无代码）的情况。
 
 ## 技术笔记
+
+### 地址换算（最容易搞错的一点）
+
+```
+运行时地址 = 模块基址 + RVA          ← 不减任何东西
+```
+
+Il2CppDumper 对 NSO 报的 RVA 锚定在**模块加载基址**，不是 `.text` 的 `mem_off`。
+
+依据：`Il2Cpp.GetRVA` 默认是恒等函数（`Il2Cpp.cs:343`），PE 覆写成 `pointer - ImageBase`、
+Macho64 覆写成 `pointer - vmaddr`，而 **`NSO.cs` 根本没覆写**。所以对 NSO 而言
+`RVA == VA == 二进制里存的原始指针`，这也是 dump.cs 里这三个数字相同的原因。
+
+NSO 的 `mem_off` 字段本身就定义了一个以模块基址为原点、横跨
+`.text → .rodata → .data → .bss` 的连续地址空间，RVA 直接活在这个空间里。
+**`.text mem_off` 只用于判断段归属，绝不参与地址运算**（减掉会造成二次修正）。
+
+换算表：
+
+| 目标 | 公式 |
+|---|---|
+| 运行时地址 | `模块基址 + RVA` |
+| Atmosphère 金手指偏移（region M=0） | `RVA`（同一坐标系，无需换算） |
+| Ghidra（Adubbz Switch Loader） | `0x7100000000 + RVA` |
+| Il2CppInspectorRedux 报的地址 | `0x7100000000 + RVA`（要减回去） |
+| dump.cs 的 `Offset:` 列 | **解压后** NSO 的文件偏移，不是磁盘文件偏移 |
+
+合法 RVA 范围是 `[0, image_size)`，其中 `image_size` 含 `.bss`
+（`nsotool.py info` 会打印）。`30-gen-offsets.py --image-size` 会据此校验。
 
 ### 工具链要点
 
@@ -148,7 +179,48 @@ Il2CppDumper 报 `RVA: -1`（方法无代码）的情况。
   上游 `Perfare/Il2CppDumper` v6.7.46 支持 v16–v31，**不需要第三方分支**
   （v35–v39 的分支是给 Unity 6000.3+ 的）
 - Il2CppDumper **内部会解压 LZ4 NSO**，不需要先跑 hactool
-- 需要 NSO/NCA/XCI 处理时，`jakcron/nstool` 有 macOS arm64 预编译版
+- 运行时必须设 `DOTNET_ROLL_FORWARD=LatestMajor`（预编译包 target net6/net7）
+- **输出目录必须先存在**，否则被静默忽略、产物落到 dll 旁边
+- `config.json` 必须和 dll 同目录，且 `RequireAnyKey` 要设成 `false`，
+  否则非交互运行会卡在 `Console.ReadKey` 上不退出
+
+### 目标类结构
+
+来源：Silksong PC 版（Mono 后端）的公开反编译。Switch 版类结构相同，只有地址要自己 dump。
+
+```csharp
+public class HealthManager : MonoBehaviour, IHitResponder, ITagDamageTakerOwner, IInitialisable
+{
+    public  int hp;        // 当前血量
+    private int initHp;    // 最大血量 —— 没有 maxHP/MaxHP 这个名字
+    public  bool isDead;
+    private bool invincible;
+    private HealthManager sendDamageTo;
+
+    public  IHitResponder.HitResponse Hit(HitInstance hitInstance);   // 公开入口
+    private HitInstance ApplyDamageScaling(HitInstance hitInstance);
+    private void TakeDamage(HitInstance hitInstance);                 // 单一重载
+}
+
+[Serializable]
+public struct HitInstance        // 是 struct，不是 class
+{
+    public int  DamageDealt;
+    public bool IsHeroDamage;    // 过滤玩家造成的伤害
+    public float Multiplier;
+}
+```
+
+**最大血量是 `initHp`。** 在 init 时由 `initHp = hp` 捕获一次，复活时 `hp = initHp` 还原。
+有意思的是 PC 版血条 mod 压根没读它 —— 它用 `Mathf.Max(打前, 打后)` 推断。
+我们两条路都支持：读到 `initHp` 就用真值，读不到退化为推断。
+
+**hook 点选择**：主 hook 是 `TakeDamage`，它拿到的是 `ApplyDamageScaling` 之后的最终伤害。
+若 dump 里 `TakeDamage` 报 `RVA: -1`，改 hook `Hit` —— 它是 `IHitResponder` 的接口实现，
+天然不会被裁剪，且有固定 vtable slot 可兜底。
+
+⚠️ `HitInstance` 是大号 by-value struct，ARM64 上会**通过隐藏指针传递**（`this` 在 x0，
+struct 指针在 x1），不是寄存器传参。写 hook 前先在反汇编里确认。
 
 ### Tesla 常驻 overlay
 
@@ -191,14 +263,15 @@ nx-ovlloader 的 applet 堆是 6 MB（`g_appletHeapSize = 0x600000`）：
 |---|------|------|
 | 1 | 共享内存协议 | ✅ |
 | 2 | 敌人追踪器 | ✅ 10 项测试 |
-| 3 | seqlock 读取端 | ✅ 8 项测试 + 850 万份并发快照零撕裂 |
-| 4 | NSO 解析 / LZ4 解压 | ✅ 8 个测试向量 |
-| 5 | 偏移生成器 | ✅ fixture 验证通过 |
-| 6 | 游戏转储 + IL2CPP dump | ⏸ 需要主机在手边 |
-| 7 | SaltyNX 插件骨架 | ⏳ |
-| 8 | TakeDamage hook | ⏳ |
-| 9 | Tesla overlay 渲染 | ⏳ |
-| 10 | 收集物地图标注 | 📋 v2 |
+| 3 | seqlock 读取端 | ✅ 8 项测试 + 880 万份并发快照零撕裂 |
+| 4 | NSO 解析 / LZ4 解压 | ✅ 17 个测试向量 |
+| 5 | 偏移生成器 | ✅ fixture + 2 条失败路径验证 |
+| 6 | IL2CPP dump 流水线 | ✅ 脚本就绪，待转储输入 |
+| 7 | 游戏转储 | ⏸ 需要主机在手边 |
+| 8 | SaltyNX 插件骨架 | ⏳ |
+| 9 | TakeDamage hook | ⏳ |
+| 10 | Tesla overlay 渲染 | ⏳ |
+| 11 | 收集物地图标注 | 📋 v2 |
 
 ## 范围说明
 

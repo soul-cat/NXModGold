@@ -1,23 +1,108 @@
 {
-  "_comment": "需要从 dump.cs 中提取的符号。改游戏版本时不用改这里，只要类/字段名没变。",
+  "_comment": [
+    "需要从 dump.cs 中提取的符号。字段名来源于 Silksong 的 PC 版反编译",
+    "（PC 版是 Mono 后端，Assembly-CSharp.dll 可直接反编译；Switch 版是 IL2CPP，",
+    "类结构相同但只有地址需要从 dump 里取）。",
+    "",
+    "重要：HealthManager 没有 maxHP / MaxHP 字段。最大血量是 initHp（private int），",
+    "在 init 时由 `initHp = hp` 捕获一次，复活时 `hp = initHp` 还原。",
+    "",
+    "字段偏移语义：IL2CPP 的原始字段偏移是相对 Il2CppObject 起始处的字节偏移，",
+    "而 Il2CppObject 是 { void* klass; void* monitor; }，所以 ARM64 上类的第一个",
+    "实例字段通常在 0x10。值类型（struct）Il2CppDumper 会减去 16，偏移相对未装箱载荷。"
+  ],
   "fields": [
-    { "name": "HM_HP",          "class": "HealthManager", "field": "hp",          "required": true },
-    { "name": "HM_MAXHP",       "class": "HealthManager", "field": "maxHP",       "required": false,
-      "aliases": ["maxHp", "MaxHP", "initHp", "initHP"] },
-    { "name": "HM_ISDEAD",      "class": "HealthManager", "field": "isDead",      "required": false },
-    { "name": "HM_INVINCIBLE",  "class": "HealthManager", "field": "invincible",  "required": false },
-    { "name": "HIT_DAMAGEDEALT","class": "HitInstance",   "field": "DamageDealt", "required": false,
-      "aliases": ["damageDealt"] },
-    { "name": "OBJ_CACHEDPTR",  "class": "Object",        "field": "m_CachedPtr", "required": false,
-      "namespace": "UnityEngine" }
+    {
+      "name": "HM_HP",
+      "class": "HealthManager",
+      "field": "hp",
+      "required": true,
+      "_note": "public int，当前血量"
+    },
+    {
+      "name": "HM_INITHP",
+      "class": "HealthManager",
+      "field": "initHp",
+      "required": true,
+      "aliases": ["initHP"],
+      "_note": "private int，最大血量。没有 maxHP 这个名字"
+    },
+    {
+      "name": "HM_ISDEAD",
+      "class": "HealthManager",
+      "field": "isDead",
+      "required": false
+    },
+    {
+      "name": "HM_INVINCIBLE",
+      "class": "HealthManager",
+      "field": "invincible",
+      "required": false,
+      "_note": "背后是 public bool IsInvincible { get; set; }"
+    },
+    {
+      "name": "HM_SENDDAMAGETO",
+      "class": "HealthManager",
+      "field": "sendDamageTo",
+      "required": false,
+      "_note": "伤害转发目标。PC 血条 mod 会跟随它，避免把伤害记到错误实体上"
+    },
+    {
+      "name": "HIT_DAMAGEDEALT",
+      "class": "HitInstance",
+      "field": "DamageDealt",
+      "required": true,
+      "_note": "public int。HitInstance 是 struct，偏移相对未装箱载荷"
+    },
+    {
+      "name": "HIT_ISHERODAMAGE",
+      "class": "HitInstance",
+      "field": "IsHeroDamage",
+      "required": true,
+      "_note": "public bool。用于过滤只显示玩家造成的伤害"
+    },
+    {
+      "name": "HIT_MULTIPLIER",
+      "class": "HitInstance",
+      "field": "Multiplier",
+      "required": false
+    },
+    {
+      "name": "OBJ_CACHEDPTR",
+      "class": "Object",
+      "field": "m_CachedPtr",
+      "namespace": "UnityEngine",
+      "required": false,
+      "_note": "指向原生 UnityEngine::Object。v2 取世界坐标时会用到"
+    }
   ],
   "methods": [
-    { "name": "HM_TAKEDAMAGE",  "class": "HealthManager", "method": "TakeDamage",  "required": true },
-    { "name": "HM_DIE",         "class": "HealthManager", "method": "Die",         "required": false },
-    { "name": "HM_START",       "class": "HealthManager", "method": "Start",       "required": false },
-    { "name": "COMP_GETGAMEOBJ","class": "Component",     "method": "get_gameObject", "required": false,
-      "namespace": "UnityEngine" },
-    { "name": "OBJ_GETNAME",    "class": "Object",        "method": "get_name",    "required": false,
-      "namespace": "UnityEngine" }
+    {
+      "name": "HM_TAKEDAMAGE",
+      "class": "HealthManager",
+      "method": "TakeDamage",
+      "required": true,
+      "_note": "private void TakeDamage(HitInstance)，单一重载，无其他版本。主 hook 点：拿到的是 ApplyDamageScaling 之后的最终伤害"
+    },
+    {
+      "name": "HM_HIT",
+      "class": "HealthManager",
+      "method": "Hit",
+      "required": false,
+      "_note": "public IHitResponder.HitResponse Hit(HitInstance)，TakeDamage 的公开入口。作为接口实现永远不会被裁剪，TakeDamage 若报 RVA -1 就改用它"
+    },
+    {
+      "name": "HM_APPLYDAMAGESCALING",
+      "class": "HealthManager",
+      "method": "ApplyDamageScaling",
+      "required": false
+    },
+    {
+      "name": "HM_DIE",
+      "class": "HealthManager",
+      "method": "Die",
+      "required": false,
+      "_note": "有 3 个重载，生成器会全部列出"
+    }
   ]
 }
