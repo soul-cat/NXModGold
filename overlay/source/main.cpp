@@ -17,7 +17,14 @@
 //    HID 共享内存，所以游戏和 overlay 会同时收到同一次按键。
 //    退出组合键必须避开小骑士的操作键。
 
+// 这个 tesla fork 是"头文件即实现"：主实现段（含 tsl::cfg 全局、
+// __libnx_* 定义、主循环）在 TESLA_INIT_IMPL 宏后面，整个项目必须
+// 恰好在一个 .cpp 里带宏 include tesla.hpp（本文件即是）。
+#define TESLA_INIT_IMPL
 #include <tesla.hpp>
+extern "C" {
+#include "saltysd_ipc_sm.h"   // Status-Monitor-Overlay 的 SaltyNX 客户端（Connect/Term/共享内存全套）
+}
 
 #include <cstring>
 
@@ -182,8 +189,8 @@ class HudGui : public tsl::Gui {
     return frame;
   }
 
-  bool handleInput(u64 keysDown, u64, u64, u64, HidAnalogStickState, HidAnalogStickState,
-                   HidTouchState) override {
+  bool handleInput(u64 keysDown, u64, const HidTouchState&, HidAnalogStickState,
+                   HidAnalogStickState) override {
     if ((keysDown & EXIT_COMBO) == EXIT_COMBO) {
       TeslaFPS = 0;
       tsl::goBack();

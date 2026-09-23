@@ -156,13 +156,21 @@ make -C overlay      # 产物是 .ovl
 ```
 
 overlay 需要**改造版 libtesla** —— 上游 `WerWolv/libtesla` framebuffer 尺寸
-写死 448x720、没有 `setLayerPos()`、无条件画黑底和页脚，做不出常驻 HUD：
+写死 448x720、没有 `setLayerPos()`、无条件画黑底和页脚，做不出常驻 HUD。
+**实际采用**的是 Status-Monitor-Overlay vendored 的那份 fork（`TeslaFPS`/
+`FullMode`/`alphabackground` 常驻配方 + `setLayerPos` 都在，无 curl 依赖）：
 
 ```bash
-git clone https://github.com/ppkantorski/libultrahand vendor/libultrahand
+git clone --depth 1 --filter=blob:none --sparse \
+    https://github.com/masagrator/Status-Monitor-Overlay.git vendor/status-monitor
+git -C vendor/status-monitor sparse-checkout set lib/libtesla include
 ```
 
-`overlay/Makefile` 会检查 `setLayerPos` 符号是否存在，拿错版本会直接报错。
+注意（2026-09 实测）：`ppkantorski/libultrahand` 仓库的 libtesla 是另一套
+大改版 API——常驻全局变量藏在 `IS_STATUS_MONITOR_DIRECTIVE` 条件编译里，
+还引入 curl/zlib/minizip 依赖（minizip 无 dkp 包）——**别用**。
+另外这份 vendored tesla 是"头文件即实现"：整个项目必须恰好在一个 .cpp 里
+`#define TESLA_INIT_IMPL` 后 include tesla.hpp（见 overlay/source/main.cpp）。
 
 devkitPro 原生 macOS 包的可用性未确认（官网被 Cloudflare 挡；Intel x86_64
 历史上受支持，但维护者已不常测 Intel mac，现状未知，装上 dkp-pacman 试一次即知）。

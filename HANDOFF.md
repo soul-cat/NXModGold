@@ -42,16 +42,21 @@ make -C tests tsan     # ThreadSanitizer
 ./tools/nsotool.py selftest
 ```
 
-### 写了但**没有编译验证**
+### 写了且**已编译验证**（2026-09-23，原生 devkitPro / Intel mac）
 
-`plugin/source/main.cpp`、`overlay/source/main.cpp`、两个 `Makefile`。
+`plugin/sshud.elf`（strip 后 100KB）与 `overlay/sshud-overlay.ovl`（292KB）
+均编译链接成功。编译期修掉的问题：
 
-原因：开发机（macOS，现为 Intel x86_64）没装 devkitPro，也没装 Docker。
-这些文件是纸面正确、未经编译器检验。**接手第一件事就是让它们编译过。**
-
-可测的部分我都刻意拆成了纯函数（重定位、hook 规划、布局、协议读写），
-所以 `main.cpp` 里剩下的基本只有 API 调用序列，编译不过大概率是
-头文件路径或 API 签名对不上，不是逻辑错。
+- trampoline 池的 section 属性必须显式 `"ax"`（volatile 数组默认 RW 属性
+  会让链接器**静默丢弃**该 section，实机 Memcpy 时才炸——纸面代码查不出）。
+- libtesla 用 **Status-Monitor-Overlay vendored 的 fork**（常驻配方完整、
+  无 curl 依赖；README 原来指的 libultrahand 是错误方向，别用）。
+  它是"头文件即实现"：一个 .cpp 里 `#define TESLA_INIT_IMPL` 再 include。
+- handleInput 的 `touchPosition`/`JoystickPosition` 是 libnx 宏，展开后
+  签名是 `(u64, u64, const HidTouchState&, HidAnalogStickState, HidAnalogStickState)`。
+- SaltySD 头：插件侧用 NX-FPS 的 include/saltysd + `switch_min.h` shim；
+  overlay 侧用 Status-Monitor 的 `SaltyNX.h`（含 Connect/Term 全套）。
+- `SaltySD_GetBID()` 无参返回 u64；`SaltySD_Init()` 返回 void（NX-FPS 版）。
 
 ### 完全没做
 
@@ -65,10 +70,9 @@ make -C tests tsan     # ThreadSanitizer
 
 ## 卡在哪
 
-**不再卡。** 2026-09-23 全流水线已打通：用户提供 base NSP + 更新档 NSZ，
-`offsets.h` 已生成（Build ID `FC9EA4CCC955D579`，对应 v1.0.3 / 655360）。
-下一步是编译两个 `main.cpp`（原生 devkitPro 路线，需要 sudo 装 dkp-pacman）
-和实机验证。
+**不再卡。** 2026-09-23 全流水线打通：转储解包 → `offsets.h`（Build ID
+`FC9EA4CCC955D579`，v1.0.3）→ `sshud.elf` + `sshud-overlay.ovl` 编译成功。
+**下一步是实机验证**（先只装 overlay 看"等待插件…"，再装插件看诊断位）。
 
 ```bash
 ./tools/00-setup.sh                  # .NET 等依赖（devkitPro 部分手动）

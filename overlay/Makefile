@@ -19,16 +19,15 @@ BUILD    := build
 SOURCES  := source
 INCLUDES := source ../shared
 
-LIBTESLA_DIR ?= $(TOPDIR)/../vendor/libultrahand/libtesla/include
+# libtesla 用 Status-Monitor-Overlay vendored 的 fork（能常驻 + setLayerPos）。
+# 注意：ppkantorski/libultrahand 仓库的 libtesla 是另一套大改版 API
+# （TeslaFPS/FullMode 藏在 IS_STATUS_MONITOR_DIRECTIVE 条件编译里，且引入
+#  curl/zlib 依赖）——不适合本项目，别换回去。
+LIBTESLA_DIR ?= $(TOPDIR)/../vendor/status-monitor/lib/libtesla/include
 INCLUDES += $(LIBTESLA_DIR)
-# tesla.hpp 依赖同仓库 libultra 的 ultra.hpp
-INCLUDES += $(TOPDIR)/../vendor/libultrahand/libultra/include
-INCLUDES += $(TOPDIR)/../vendor/libultrahand/common
-# minizip 无官方包，stub 见 overlay/shim/（不用下载/解压功能）
-INCLUDES += $(TOPDIR)/shim
 
-# SaltyNX 的 IPC 头（overlay 侧要用 SaltySD_Connect / GetSharedMemoryHandle）
-SALTYNX_SRC ?= $(TOPDIR)/../vendor/SaltyNX/saltysd_core/source
+# SaltySD IPC：Status-Monitor-Overlay 的 SaltyNX.h（inline 实现，含 Connect/Term/共享内存）
+SALTYNX_SRC ?= $(TOPDIR)/../vendor/status-monitor/include
 INCLUDES += $(SALTYNX_SRC)
 
 APP_TITLE   := Silksong HUD
@@ -39,14 +38,12 @@ ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS   := -g -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(ARCH) $(DEFINES)
 CFLAGS   += $(INCLUDE) -D__SWITCH__
-CXXFLAGS := $(CFLAGS) -fno-rtti -fexceptions -std=gnu++20
+CXXFLAGS := $(CFLAGS) -fexceptions -std=gnu++20
 
 ASFLAGS  := -g $(ARCH)
 LDFLAGS   = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-# libultrahand 头文件链会引入 curl/zlib/mbedtls 符号（即便不用下载功能，
-# tesla 部分实现引用了它们），见其 README:109-156
-LIBS     := -lcurl -lz -lmbedtls -lmbedx509 -lmbedcrypto -lnx
+LIBS     := -lnx
 LIBDIRS  := $(PORTLIBS) $(LIBNX)
 
 #---------------------------------------------------------------------------------
