@@ -109,11 +109,63 @@ make -C tests tsan     # ThreadSanitizer
 
 ---
 
-## 卡在哪
+## 卡在哪 / 实机调试进度（2026-09-24，等待下一轮实机验证）
 
-**不再卡。** 2026-09-23 全流水线打通：转储解包 → `offsets.h`（Build ID
-`FC9EA4CCC955D579`，v1.0.3）→ `sshud.elf` + `sshud-overlay.ovl` 编译成功。
-**下一步是实机验证**（先只装 overlay 看"等待插件…"，再装插件看诊断位）。
+全流水线已打通：转储 → `offsets.h`（Build ID `FC9EA4CCC955D579`，v1.0.3）→
+两个产物编译成功。实机验证进度：
+
+| 环节 | 状态 |
+|---|---|
+| overlay 常驻层（"等待插件…"、Tesla 组合键显隐、NACP 列表） | ✅ 全通 |
+| 插件 ELF 加载（符号绑定、main 执行到 GetBID） | ✅ 全通（日志铁证） |
+| 游戏正常启动（不再 2168-0002） | ✅（签名校验后） |
+| TakeDamage hook 安装 | ❓ 前次 12 区域扫描没找到签名匹配 → 已扩到 48，待验证 |
+| 共享内存块互通（overlay 读到插件数据） | ❓ offset 撞车已修（固定 0x800），待验证 |
+| 血条显示 | 未到 |
+
+**待验证版本：commit b5c0113**（`plugin/sshud.elf` 覆盖 SD 后重进游戏）。
+判读：HUD 若仍"等待插件"，看右侧自动扫描有无 `[800]=44485353`——
+有则是 overlay 端问题，无则是写入仍有问题；游戏正常时打一个怪，
+hook 若装上则 TakeDamage 触发（`SSHUD_HOOK_TAKEDAMAGE` 位 → HUD 有数据）。
+
+### 实机日志的两个读法（已验证有效）
+
+- `SD:/SaltySD/saltynx.log`（服务端）: `serviceMemcpy` 三连 =
+  installHook 执行（读 0x10/写 trampoline 0x20/写 detour 0x10）；
+  `serviceCheckIfSharedMemoryAvailable size: N` 的 N 曾见 7（异常值）。
+- `SD:/SaltySD/saltynx_core.log`: `N 0x0->0xADDR SYMBOL` = 绑定成功；
+  无前缀 `BID:` 行 = 插件 main 调了 GetBID（NX-FPS 的带 `NX-FPS:` 前缀）。
+- 插件自己的 SaltySD_printf **不可靠**（绑定了但输出从未出现在日志），
+  调试用 overlay 屏幕显示（overlay 端 dump/自动扫描已内建）。
+
+### 其他机器接手需要的材料（都不在版本库里，自行带走）
+
+1. `datas/`（不入库）：base NSP、更新档 NSZ、prod.keys —— 重新生成
+   offsets.h 与实机装版本用。流水线：`05 → 10 → 20 → 30`（见上）。
+2. devkitPro（dkp-pacman + switch-dev；switch-curl/zlib/mbedtls 本项目
+   已不需要——overlay 换用 Status-Monitor tesla 后无 portlib 依赖）+
+   .NET 8/10 SDK（`curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s
+   -- --channel 8.0 --install-dir ~/.dotnet`，Il2CppDumper 用 8，
+   Il2CppInspectorRedux CLI 另需 10 + aspnetcore runtime）。
+3. **vendor/ 重建**（全部 gitignored）：
+   - `git clone https://github.com/shinyquagsire23/SaltyNX.git vendor/SaltyNX`
+   - `git clone --depth 1 https://github.com/Perfare/Il2CppDumper.git vendor/Il2CppDumper`（20 脚本自动打 unity6 补丁）
+   - `git clone --depth 1 --filter=blob:none --sparse https://github.com/masagrator/Status-Monitor-Overlay.git vendor/status-monitor && git -C vendor/status-monitor sparse-checkout set lib/libtesla include`
+   - **vendor/nx-fps-libnx**（libnx_min 运行时，SaltyNX 插件必需）：
+     从 `masagrator/NX-FPS` 仓库 `lib/libnx_min/nx/` 下载 `lib/` 与
+     `include/`（递归）以及 `switch.ld`/`switch.specs`。其中
+     **lib/libsysbase.a 是本机修补版**（GCC16 的 devoptab 指针表在只读段，
+     修补命令，重做一次即可）：
+     ```sh
+     cp $DEVKITA64/aarch64-none-elf/lib/libsysbase.a vendor/nx-fps-libnx/lib/
+     cd vendor/nx-fps-libnx/lib
+     ar x libsysbase.a libsysbase_libsysbase_a-iosupport.o
+     aarch64-none-elf-objcopy --rename-section .rodata.dotab_stdnull=.data.dotab_stdnull \
+       libsysbase_libsysbase_a-iosupport.o fix.o && mv fix.o libsysbase_libsysbase_a-iosupport.o
+     ar r libsysbase.a libsysbase_libsysbase_a-iosupport.o
+     ```
+4. 实机：Switch 1 + Atmosphère + SaltyNX 1.9.3 + nx-ovlloader/Tesla-Menu；
+   主机上必须装 v1.0.3 更新档（Build ID 匹配）。**勿联网（封号）**。
 
 ```bash
 ./tools/00-setup.sh                  # .NET 等依赖（devkitPro 部分手动）
