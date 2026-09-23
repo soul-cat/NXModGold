@@ -11,20 +11,14 @@ PHDRS
 
 SECTIONS
 {
-	PROVIDE_HIDDEN( __start__ = 0x0 );
-
 	/* =========== CODE section =========== */
+	PROVIDE(__start__ = 0x0);
 	. = __start__;
-	PROVIDE_HIDDEN( __code_start = . );
+	__code_start = . ;
 
-	.text :
+	.crt0 :
 	{
 		KEEP (*(.crt0))
-		*(.text.unlikely .text.*_unlikely .text.unlikely.*)
-		*(.text.exit .text.exit.*)
-		*(.text.startup .text.startup.*)
-		*(.text.hot .text.hot.*)
-		*(.text .stub .text.* .gnu.linkonce.t.*)
 		. = ALIGN(8);
 	} :code
 
@@ -41,6 +35,16 @@ SECTIONS
 		. = ALIGN(8);
 	} :code
 
+	.text :
+	{
+		*(.text.unlikely .text.*_unlikely .text.unlikely.*)
+		*(.text.exit .text.exit.*)
+		*(.text.startup .text.startup.*)
+		*(.text.hot .text.hot.*)
+		*(.text .stub .text.* .gnu.linkonce.t.*)
+		. = ALIGN(8);
+	} :code
+
 	.fini :
 	{
 		KEEP( *(.fini) )
@@ -49,143 +53,134 @@ SECTIONS
 
 	/* =========== RODATA section =========== */
 	. = ALIGN(0x1000);
-	PROVIDE_HIDDEN( __rodata_start = . );
+	__rodata_start = . ;
 
 	.nx-module-name : { KEEP (*(.nx-module-name)) } :rodata
 
-	.rela.dyn : { *(.rela.*) } :rodata
-	.relr.dyn : { *(.relr.*) } :rodata
-
-	.hash     : { *(.hash) } :rodata
-	.gnu.hash : { *(.gnu.hash) } :rodata
-
-	.dynsym   : { *(.dynsym) } :rodata
-	.dynstr   : { *(.dynstr) } :rodata
-
+	/* .rodata 归入可写 PHDR：GCC16 libsysbase 的 devoptab(.rodata.dotab_stdnull)
+	   含需运行时重定位的函数指针，-z text 下放只读段会链接失败，运行时
+	   __nx_dynamic 写它也会崩。老工具链(libnx_min 时代)把这类表放 .data.rel.ro，
+	   这里整段归 RW 是对老行为的等价近似（除那 0x100 字节外无人写 rodata）。 */
 	.rodata :
 	{
 		*(.rodata .rodata.* .gnu.linkonce.r.*)
 		. = ALIGN(8);
-	} :rodata
+	} :data
 
-	.tls.align :
-	{
-		QUAD( MAX( ALIGNOF(.tdata), ALIGNOF(.tbss) ) )
-	} :rodata
+	.eh_frame_hdr     : { __eh_frame_hdr_start = .; *(.eh_frame_hdr) *(.eh_frame_entry .eh_frame_entry.*) __eh_frame_hdr_end = .; } :rodata
+	.eh_frame         : ONLY_IF_RO { KEEP (*(.eh_frame)) *(.eh_frame.*) } :rodata
+	.gcc_except_table : ONLY_IF_RO { *(.gcc_except_table .gcc_except_table.*) } :rodata
+	.gnu_extab        : ONLY_IF_RO { *(.gnu_extab*) } : rodata
 
-	PROVIDE_HIDDEN( __tls_align = ADDR(.tls.align) );
-
-	.gcc_except_table  : { *(.gcc_except_table .gcc_except_table.*) } :rodata
-	.eh_frame_hdr      : { *(.eh_frame_hdr) *(.eh_frame_entry .eh_frame_entry.*) } :rodata
-	.eh_frame          : { KEEP (*(.eh_frame)) *(.eh_frame.*) } :rodata
-	.gnu_extab         : { *(.gnu_extab*) } : rodata
-	.exception_ranges  : { *(.exception_ranges .exception_ranges*) } :rodata
-
-	PROVIDE_HIDDEN( __eh_frame_hdr_start = ADDR(.eh_frame_hdr)                         );
-	PROVIDE_HIDDEN( __eh_frame_hdr_end   = ADDR(.eh_frame_hdr) + SIZEOF(.eh_frame_hdr) );
-
+	.dynamic           : { *(.dynamic) } :rodata :dyn
+	.dynsym            : { *(.dynsym) } :rodata
+	.dynstr            : { *(.dynstr) } :rodata
+	.rela.dyn          : { *(.rela.*) } :rodata
+	.interp            : { *(.interp) } :rodata
+	.hash              : { *(.hash) } :rodata
+	.gnu.hash          : { *(.gnu.hash) } :rodata
 	.gnu.version       : { *(.gnu.version) } :rodata
 	.gnu.version_d     : { *(.gnu.version_d) } :rodata
 	.gnu.version_r     : { *(.gnu.version_r) } :rodata
-
 	.note.gnu.build-id : { *(.note.gnu.build-id) } :rodata
-
-	/* =========== RELRO section =========== */
-	. = ALIGN(0x1000);
-	PROVIDE_HIDDEN( __relro_start = . );
-
-	.preinit_array :
-	{
-		PROVIDE_HIDDEN( __preinit_array_start = . );
-		KEEP (*(.preinit_array))
-		PROVIDE_HIDDEN( __preinit_array_end = . );
-	} :data
-
-	.init_array :
-	{
-		PROVIDE_HIDDEN( __init_array_start = . );
-		KEEP( *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)) )
-		KEEP( *(.init_array .ctors) )
-		PROVIDE_HIDDEN( __init_array_end = . );
-	} :data
-
-	.fini_array :
-	{
-		PROVIDE_HIDDEN( __fini_array_start = . );
-		KEEP( *(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)) )
-		KEEP( *(.fini_array .dtors) )
-		PROVIDE_HIDDEN( __fini_array_end = . );
-	} :data
-
-	.data.rel.ro :
-	{
-		*(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*)
-		*(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*)
-		. = ALIGN(8);
-	} :data
-
-	.dynamic : { *(.dynamic) } :data :dyn
-
-	.got     : { *(.got) *(.igot) } :data
-	.got.plt : { *(.got.plt)  *(.igot.plt) } :data
-
-	PROVIDE_HIDDEN( __got_start__ = ADDR(.got)                        );
-	PROVIDE_HIDDEN( __got_end__   = ADDR(.got.plt) + SIZEOF(.got.plt) );
 
 	/* =========== DATA section =========== */
 	. = ALIGN(0x1000);
-	PROVIDE_HIDDEN( __data_start = . );
+	__data_start = . ;
 
-	.data :
+	.eh_frame : ONLY_IF_RW { KEEP (*(.eh_frame)) *(.eh_frame.*) } :data
+	.gcc_except_table : ONLY_IF_RW { *(.gcc_except_table .gcc_except_table.*) } :data
+	.gnu_extab : ONLY_IF_RW { *(.gnu_extab*) } : data
+	.exception_ranges : ONLY_IF_RW { *(.exception_ranges .exception_ranges*) } :data
+
+	.tdata ALIGN(8) :
+	{
+		__tdata_lma = .;
+		*(.tdata .tdata.* .gnu.linkonce.td.*)
+		. = ALIGN(8);
+		__tdata_lma_end = .;
+	} :data
+
+	.tbss ALIGN(8) :
+	{
+		*(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon)
+		. = ALIGN(8);
+	} :data
+
+	.preinit_array ALIGN(8) :
+	{
+		PROVIDE (__preinit_array_start = .);
+		KEEP (*(.preinit_array))
+		PROVIDE (__preinit_array_end = .);
+	} :data
+
+	.init_array ALIGN(8) :
+	{
+		PROVIDE (__init_array_start = .);
+		KEEP (*(SORT(.init_array.*)))
+		KEEP (*(.init_array))
+		PROVIDE (__init_array_end = .);
+	} :data
+
+	.fini_array ALIGN(8) :
+	{
+		PROVIDE (__fini_array_start = .);
+		KEEP (*(.fini_array))
+		KEEP (*(SORT(.fini_array.*)))
+		PROVIDE (__fini_array_end = .);
+	} :data
+
+	.ctors ALIGN(8) :
+	{
+		KEEP (*crtbegin.o(.ctors)) /* MUST be first -- GCC requires it */
+		KEEP (*(EXCLUDE_FILE (*crtend.o) .ctors))
+		KEEP (*(SORT(.ctors.*)))
+		KEEP (*(.ctors))
+	} :data
+
+	.dtors ALIGN(8) :
+	{
+		KEEP (*crtbegin.o(.dtors))
+		KEEP (*(EXCLUDE_FILE (*crtend.o) .dtors))
+		KEEP (*(SORT(.dtors.*)))
+		KEEP (*(.dtors))
+	} :data
+
+	__got_start__ = .;
+
+	.got            : { *(.got) *(.igot) } :data
+	.got.plt        : { *(.got.plt)  *(.igot.plt) } :data
+
+	__got_end__ = .;
+
+	/* devoptab 等含函数指针的"只读"表：进可写段（见上方注释） */
+	.devoptab.rodata : { KEEP (*(.rodata.dotab_stdnull*)) } :data
+
+	.data ALIGN(8) :
 	{
 		*(.data .data.* .gnu.linkonce.d.*)
 		SORT(CONSTRUCTORS)
-		. = ALIGN(8);
 	} :data
 
-	.tdata :
-	{
-		*(.tdata .tdata.* .gnu.linkonce.td.*)
-		. = ALIGN(8);
-	} :data
-
-	PROVIDE_HIDDEN( __tdata_lma     = ADDR(.tdata)                  );
-	PROVIDE_HIDDEN( __tdata_lma_end = ADDR(.tdata) + SIZEOF(.tdata) );
-
-	.tbss :
-	{
-		*(.tbss .tbss.* .gnu.linkonce.tb.*)
-		*(.tcommon)
-		. = ALIGN(8);
-	} :data
-
-	.bss :
+	__bss_start__ = .;
+	.bss ALIGN(8) :
 	{
 		*(.dynbss)
 		*(.bss .bss.* .gnu.linkonce.b.*)
 		*(COMMON)
 		. = ALIGN(8);
-	} :data
 
-	/* Reserve space for the TLS segment of the main thread */
-	.main.tls ALIGN(MAX(ALIGNOF(.tdata),ALIGNOF(.tbss))) :
-	{
-		. += SIZEOF(.tdata);
-		. = ALIGN(ALIGNOF(.tbss));
-		. += SIZEOF(.tbss);
-	} :data
+		/* Reserve space for the TLS segment of the main thread */
+		__tls_start = .;
+		. += + SIZEOF(.tdata) + SIZEOF(.tbss);
+		__tls_end = .;
+	} : data
+	__bss_end__ = .;
 
-	PROVIDE_HIDDEN( __tls_start   = ADDR(.main.tls)                     );
-	PROVIDE_HIDDEN( __tls_end     = ADDR(.main.tls) + SIZEOF(.main.tls) );
+	__end__ = ABSOLUTE(.) ;
 
-	PROVIDE_HIDDEN( __bss_start__ = ADDR(.bss) );
-	PROVIDE_HIDDEN( __bss_end__   = __tls_end  );
-
-	PROVIDE_HIDDEN( __end__ = . );
-
-	/* =========== Argument buffer =========== */
 	. = ALIGN(0x1000);
-	PROVIDE_HIDDEN( __argdata__ = . );
+	__argdata__ = ABSOLUTE(.) ;
 
 	/* ==================
 	   ==== Metadata ====

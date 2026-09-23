@@ -23,13 +23,18 @@ BUILD    := build
 SOURCES  := source
 INCLUDES := source ../shared shim
 
-# SaltyNX 的头文件路径。默认指向 vendor/ 下克隆的仓库；
-# 放在别处就在命令行传 SALTYNX_SRC=<path>。
+# SaltyNX 的头文件路径（SaltySD API 声明来自 plugin/shim/saltysd，比上游全）
 SALTYNX_SRC ?= $(TOPDIR)/../vendor/SaltyNX/saltysd_core/source
 INCLUDES += $(SALTYNX_SRC)
 
+# libnx_min：NX-FPS 维护的精简运行时，其 crt0 自带 __nx_dynamic 自重定位——
+# SaltyNX Core 的动态链接会跳过 R_AARCH64_RELATIVE（saltysd_dynamic.c），
+# 系统 libnx 的 crt0 假定 rtld 处理重定位，用它链接的插件在 crt0 就崩
+# （实机 2168-0002，main 从未执行）。见 HANDOFF。
+LIBNXMIN ?= $(abspath $(TOPDIR)/../vendor/nx-fps-libnx)
+
 # -fPIE 必需：插件被加载到任意地址。
-# -fno-plt 避免 PLT 间接跳转，简化符号解析。
+# 避免 PLT 间接跳转，简化符号解析。
 ARCH     := -march=armv8-a -mtune=cortex-a57 -mtp=soft -fPIE -fno-plt
 
 CFLAGS   := -g -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(ARCH) $(DEFINES)
@@ -42,9 +47,11 @@ LDFLAGS   = -specs=$(TOPDIR)/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 # 加载器按名字要求导出 main
 LDFLAGS  += -Wl,--require-defined=main -Wl,--dynamic-list=$(TOPDIR)/exports.txt
 LDFLAGS  += -Wl,-z,max-page-size=0x1000
+# SaltySD 函数是强 UND（运行时由 SaltyNX Core 绑定），链接期忽略未解析
+LDFLAGS  += -Wl,--unresolved-symbols=ignore-all
 
-LIBS     := -lnx
-LIBDIRS  := $(PORTLIBS) $(LIBNX)
+LIBS     := -lnx_min
+LIBDIRS  := $(LIBNXMIN) $(PORTLIBS) $(LIBNX)
 
 #---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
@@ -62,8 +69,10 @@ export LD := $(CXX)
 export OFILES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
 export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
                   $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+                  -I$(LIBNXMIN)/include \
                   -I$(CURDIR)/$(BUILD)
-export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+# 过滤空目录：PORTLIBS 在部分环境下展开为空，会产生 "-L/lib" 使 ld 报 Invalid argument
+export LIBPATHS := $(foreach dir,$(filter-out $(TOPDIR)/../vendor/nx-fps-libnx,$(LIBDIRS)),-L$(dir)/lib) -L$(LIBNXMIN)/lib
 
 .PHONY: all clean check-offsets
 
@@ -102,10 +111,9 @@ $(OUTPUT).elf: $(OFILES)
 	@echo
 	@echo "构建完成: $@"
 	@$(NM) $@ | grep -q ' T main' || { echo "错误: main 未导出"; exit 1; }
-	@$(STRIP) $@ -o $@.stripped; \
-	 SIZE=$$(wc -c < $@.stripped | tr -d ' '); \
+	@$(STRIP) $@ -o $@.full; \
+	 SIZE=$$(wc -c < $@ | tr -d ' '); \
 	 echo "  strip 后大小: $$SIZE 字节"; \
-	 rm -f $@.stripped; \
 	 if [ $$SIZE -gt 2097152 ]; then \
 	   echo "  错误: 超过 SaltyNX 的 2 MiB 上限"; exit 1; \
 	 fi

@@ -42,10 +42,51 @@ make -C tests tsan     # ThreadSanitizer
 ./tools/nsotool.py selftest
 ```
 
-### 写了且**已编译验证**（2026-09-23，原生 devkitPro / Intel mac）
+### 写了且**已编译验证**（2026-09-23/24，原生 devkitPro / Intel mac）
 
-`plugin/sshud.elf`（strip 后 100KB）与 `overlay/sshud-overlay.ovl`（292KB）
-均编译链接成功。编译期修掉的问题：
+`overlay/sshud-overlay.ovl`（292KB）与 `plugin/sshud.elf`（1.6MB）均编译
+链接成功；overlay 已实机验证（"等待插件…"显示、组合键显隐正常）。
+
+#### SaltyNX 插件加载机制（实机崩溃反推的一手结论，都是源码级证据）
+
+插件加载链：`saltysd_core` 调 `SaltySD_LoadELF` → `load_elf_proc`
+（vendor/SaltyNX/saltysd_proc/source/loadelf.cpp）把 ELF 各 LOAD 段写进
+游戏进程、随机地址映射、按 phdr flags 设权限 → Core 的
+`SaltySDCore_DynamicLinkModule`（saltysd_dynamic.c）做符号级动态链接 →
+`elf_trampoline` 直接跳 ELF 入口（= .crt0 的 _start）。
+
+**分工是两半拼起来的，缺一不可：**
+- Core 的 DynamicLinkModule **跳过 R_AARCH64_RELATIVE**（直接 continue），
+  只处理 GLOB_DAT/JUMP_SLOT/ABS64（用 FindSymbol 从已注册模块解析）；
+- **libnx_min（NX-FPS vendored）的 crt0 自带 `__nx_dynamic` 迷你动态链接器**
+  （反汇编确认：恰好只应用 RELATIVE=0x403）。
+
+系统 libnx 4.12 的 crt0 没有自重定位（假定 rtld 干这事）——用它链接的插件
+在 crt0 第一个全局指针访问就崩（实机 2168-0002，日志无任何 sshud: 输出，
+连 main 都没进）。**插件必须用 vendor/nx-fps-libnx 的 libnx_min 链接。**
+
+#### 现代 GCC 16 / binutils 2.46 编 SaltyNX 插件的四个坑（全踩过）
+
+1. **`-pie` 不再生成动态形态**：老 ld 对 -fno-plt 弱 UND 自动生成 GLOB_DAT
+   + dynsym；新 ld 把 GOT 静态折叠成 0，SaltySD 调用全部消失。**解法：
+   specs 里 `-pie` 改 `-shared`**（形态与 ReverseNX 发布版逐项一致）。
+2. **LINKABLE(weak) 声明失效**：新 ld 对弱 UND 的 GOT 静态解析为 0。
+   **解法：shim/saltysd 头去掉 LINKABLE 改强 UND** +
+   `-Wl,--unresolved-symbols=ignore-all`。
+3. **GCC16 libsysbase 的 devoptab(.rodata.dotab_stdnull) 含函数指针**：
+   RELATIVE 目标落只读段 → `-z text` 链接失败；即便 notext 过了，运行时
+   __nx_dynamic 写只读页也崩。**解法：vendor/nx-fps-libnx/lib/libsysbase.a
+   是修补版**（objcopy 把该段改名 .data.*；构建脚本见 HANDOFF 历史）。
+4. **`-fno-plt` 必须保留**（NX-FPS 原配置）：SaltySD 调用走 GOT 才有
+   GLOB_DAT 供 Core 绑定。
+
+**验收清单**（构建后必查，一条 python 命令见 tools/ 或手跑 readelf）：
+- 重定位分布 = N×RELATIVE + ≥1×GLOB_DAT（SaltySD 符号数）
+- dynsym 含 GLOBAL UND SaltySD_*
+- 所有 RELATIVE 目标落在 RW LOAD（RX/R 段内目标数 = 0）
+- `T main` 导出、trampoline 池（ret 填充）在 .text 内
+
+编译期其它修复：
 
 - trampoline 池的 section 属性必须显式 `"ax"`（volatile 数组默认 RW 属性
   会让链接器**静默丢弃**该 section，实机 Memcpy 时才炸——纸面代码查不出）。

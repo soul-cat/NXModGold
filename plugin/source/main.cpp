@@ -16,7 +16,8 @@
 //   3. 所有代码 patch 必须在 main() 里一次做完。
 //   4. main() 必须 return，绝不能 exit —— exit 会杀掉游戏进程。
 
-#include <switch.h>
+// libnx_min 运行时：只 include switch_min.h，绝不能混系统 switch.h（类型冲突）
+#include <switch_min.h>
 
 #include <cstdio>
 #include <cstring>
@@ -266,9 +267,23 @@ bool installHook(uint64_t targetAddr, int slotIndex, void* hookFn,
 }  // namespace
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 分阶段调试开关（实机二分定位用）：
+//   make -C plugin SSHUD_STAGE=N
+//   0=只验证加载  1=+共享内存  2=+BuildID  3=+找基址  4=完整(默认)
+// 定位到崩溃阶段后记得改回来再正常构建。
+// ---------------------------------------------------------------------------
+#ifndef SSHUD_STAGE
+#define SSHUD_STAGE 4
+#endif
+
 extern "C" int main(int argc, char* argv[]) {
   (void)argc;
   (void)argv;
+#if SSHUD_STAGE < 1
+  SaltySD_printf("sshud: stage0 加载验证\n");
+  return 0;
+#endif
 
   if (!setupSharedMemory()) {
     SaltySD_printf("sshud: 共享内存申请失败\n");
@@ -276,12 +291,20 @@ extern "C" int main(int argc, char* argv[]) {
   }
   g_tracker.init(g_shared, readTickFreq(), 0);
   g_tracker.setHookStatus(SSHUD_HOOK_INIT_OK);
+#if SSHUD_STAGE < 2
+  SaltySD_printf("sshud: stage1 共享内存 OK\n");
+  return 0;
+#endif
 
   if (!verifyBuildId()) {
     SaltySD_printf("sshud: Build ID 不匹配，期望 %s。不做任何 patch。\n", SS_BUILD_ID_STR);
     return 0;
   }
   g_tracker.setHookStatus(SSHUD_HOOK_BUILDID_OK);
+#if SSHUD_STAGE < 3
+  SaltySD_printf("sshud: stage2 BuildID OK\n");
+  return 0;
+#endif
 
   const uint64_t mainBase = findMainNsoBase();
   if (mainBase == 0) {
@@ -289,6 +312,10 @@ extern "C" int main(int argc, char* argv[]) {
     return 0;
   }
   SaltySD_printf("sshud: main NSO @ %lx\n", mainBase);
+#if SSHUD_STAGE < 4
+  SaltySD_printf("sshud: stage3 基址定位 OK\n");
+  return 0;
+#endif
 
   if (installHook(mainBase + HM_TAKEDAMAGE, 0, reinterpret_cast<void*>(&takeDamageHook),
                   &g_origTakeDamage)) {
