@@ -174,6 +174,23 @@ void drawShmemDump(tsl::gfx::Renderer* renderer, const void* base) {
                 g_shmemMapped ? "" : " (map pending)");
   renderer->drawString(line, false, sshud::BAR_MARGIN_X, 66 + 4 * 18 + 6, 14,
                        renderer->a(tsl::gfx::Color(0xF, 0xC, 0x4, 0xF)));
+
+  // 自动分析：全块扫描 0x4448xxxx / 0x53xxxxxx 模样的疑似 magic，列出前 4 个
+  int shown = 0;
+  const uint32_t totalWords = SSHUD_SHMEM_TOTAL / 4;
+  for (uint32_t w = 0; w < totalWords && shown < 4; ++w) {
+    const uint32_t v = words[w];
+    if ((v & 0xFFFF0000u) == 0x44480000u || (v & 0xFFFFFF00u) == 0x53534800u) {
+      std::snprintf(line, sizeof(line), "[%03x]=%08X", w * 4, v);
+      renderer->drawString(line, true, 330, 66 + shown * 18, 14,
+                           renderer->a(tsl::gfx::Color(0xF, 0xC, 0x4, 0xF)));
+      ++shown;
+    }
+  }
+  if (shown == 0) {
+    renderer->drawString("no 4448xxxx found", true, 330, 66, 14,
+                         renderer->a(tsl::gfx::Color(0xF, 0x8, 0x8, 0xF)));
+  }
 }
 
 // ---------------------------------------------------------------------------
