@@ -180,13 +180,13 @@ void takeDamageHook(void* self, void* hitInstance) {
 /// 启发式命中了 main+0x200000 的可执行区域，detour 写错位置，游戏死在
 /// 引擎启动前（主机 logo 后黑屏）。因此这里必须叠加【签名校验】：
 /// 候选区域开头 16 字节与 SS_MAIN_SIG（转储的 main RVA0 mod 头）比对，
-/// 不匹配就继续找，最多 12 个区域。宁可返回 0 也不写错位置。
+/// 不匹配就继续找，最多 48 个区域。宁可返回 0 也不写错位置。
 uint64_t findMainNsoBase() {
   MemoryInfo info = {};
   u32 pageInfo = 0;
   uint64_t probe = SaltySDCore_getCodeStart() + 0x4000;
 
-  for (int attempt = 0; attempt < 12; ++attempt) {
+  for (int attempt = 0; attempt < 48; ++attempt) {
     if (R_FAILED(svcQueryMemory(&info, &pageInfo, probe))) return 0;
     if (info.addr == probe && (info.perm & Perm_X) != 0) {
 #ifdef SS_MAIN_SIG0
@@ -226,10 +226,10 @@ bool verifyBuildId() {
 /// 映射本身在 SaltySD_Deinit() 之后依然有效，只有 IPC 会话会关闭。
 bool setupSharedMemory() {
   static SharedMemory shmem = {};
-  ptrdiff_t offset = 0;
+  ptrdiff_t reported = 0;
   Handle handle = 0;
 
-  if (R_FAILED(SaltySD_CheckIfSharedMemoryAvailable(&offset, SSHUD_BLOCK_SIZE))) {
+  if (R_FAILED(SaltySD_CheckIfSharedMemoryAvailable(&reported, SSHUD_BLOCK_SIZE))) {
     return false;
   }
   if (R_FAILED(SaltySD_GetSharedMemoryHandle(&handle))) return false;
@@ -237,8 +237,14 @@ bool setupSharedMemory() {
   shmemLoadRemote(&shmem, handle, SSHUD_SHMEM_TOTAL, Perm_Rw);
   if (R_FAILED(shmemMap(&shmem))) return false;
 
+  // ⚠️ 实机验证（2026-09-24）：Core 符号版 CheckIfSharedMemoryAvailable 返回的
+  // offset 与 NX-FPS 自打包 IPC(cmd 6) 的语义不一致（写入后 magic 被别的插件
+  // 数据覆盖 / 完整 magic 从未出现在块内）。改用固定偏移：0x800 避开
+  // NX-FPS(@4) 与 ReverseNX(@316) 的地盘，本块 432B 止于 0x9B0 < 0x1000。
+  // CheckIf 仍然调用（向 Core 登记容量），但其返回值不作为写位置。
+  constexpr uintptr_t kBlockOffset = 0x800;
   g_shared = reinterpret_cast<SsHudBlock*>(
-      reinterpret_cast<uintptr_t>(shmemGetAddr(&shmem)) + offset);
+      reinterpret_cast<uintptr_t>(shmemGetAddr(&shmem)) + kBlockOffset);
   return true;
 }
 
