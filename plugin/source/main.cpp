@@ -175,15 +175,33 @@ void takeDamageHook(void* self, void* hitInstance) {
 /// （NX-FPS/source/main.cpp:184-198）：假设 rtld 模块整体不超过 0x4000，
 /// 跨过它之后逐区域找第一个起始地址正好等于探测点的可执行区域。
 /// 不是 API 契约，但整个零售游戏库上都这么用。
+///
+/// ⚠️ 实机翻车记录（2026-09-24，Silksong v1.0.3）：Silksong 的布局里
+/// 启发式命中了 main+0x200000 的可执行区域，detour 写错位置，游戏死在
+/// 引擎启动前（主机 logo 后黑屏）。因此这里必须叠加【签名校验】：
+/// 候选区域开头 16 字节与 SS_MAIN_SIG（转储的 main RVA0 mod 头）比对，
+/// 不匹配就继续找，最多 12 个区域。宁可返回 0 也不写错位置。
 uint64_t findMainNsoBase() {
   MemoryInfo info = {};
   u32 pageInfo = 0;
   uint64_t probe = SaltySDCore_getCodeStart() + 0x4000;
 
-  for (int attempt = 0; attempt < 3; ++attempt) {
+  for (int attempt = 0; attempt < 12; ++attempt) {
     if (R_FAILED(svcQueryMemory(&info, &pageInfo, probe))) return 0;
-    if (info.addr == probe && (info.perm & Perm_X) != 0) return probe;
+    if (info.addr == probe && (info.perm & Perm_X) != 0) {
+#ifdef SS_MAIN_SIG0
+      uint64_t sig[2] = {};
+      if (R_SUCCEEDED(SaltySD_Memcpy(reinterpret_cast<uintptr_t>(sig), probe, sizeof(sig))) &&
+          sig[0] == SS_MAIN_SIG0 && sig[1] == SS_MAIN_SIG1) {
+        return probe;   // 签名匹配，这就是 main
+      }
+      // 签名不符：继续扫下一个区域（不做任何假设）
+#else
+      return probe;     // 无签名数据时退回原始启发式（不应发生）
+#endif
+    }
     probe = info.addr + info.size;
+    if (probe == 0) return 0;
   }
   return 0;
 }

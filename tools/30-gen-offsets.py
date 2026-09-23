@@ -32,6 +32,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# --main-bin: work/main.bin（解包镜像），取前 16 字节做 main NSO 运行时签名
+# （NSO RVA0 处的 rtld mod 头，内嵌相对指针、不含加载基址，ASLR 安全）
 
 RE_NAMESPACE = re.compile(r"^//\s*Namespace:\s*(\S*)\s*$")
 RE_TYPE = re.compile(
@@ -247,6 +249,7 @@ def build_header(
     targets: dict[str, Any],
     build_id: str,
     image_size: int,
+    main_sig: tuple[int, int] | None = None,
 ) -> tuple[list[str], list[str]]:
     """生成 offsets.h 的行，以及缺失的必需符号列表。"""
     lines = [
@@ -266,6 +269,15 @@ def build_header(
         "",
         f'#define SS_BUILD_ID_STR "{build_id}"',
         "",
+    ]
+    if main_sig is not None:
+        lines += [
+            "// main NSO 运行时签名：RVA0 处 16 字节（rtld mod 头，内嵌相对指针）。",
+            "// findMainNsoBase 用它验证候选区域，杜绝把别的模块/区域当成 main。",
+            f"#define SS_MAIN_SIG0 0x{main_sig[0]:016X}ULL",
+            f"#define SS_MAIN_SIG1 0x{main_sig[1]:016X}ULL",
+        ]
+    lines += [
         "// ---------------------------------------------------------------- 字段偏移",
     ]
     missing: list[str] = []
@@ -287,6 +299,11 @@ def main() -> int:
     parser.add_argument("--out", default=str(REPO_ROOT / "plugin" / "source" / "offsets.h"))
     parser.add_argument("--build-id", default="", help="游戏 Build ID（16 位十六进制）")
     parser.add_argument(
+        "--main-bin",
+        default=str(REPO_ROOT / "work" / "main.bin"),
+        help="解包后的 main 镜像，取 RVA0 前 16 字节生成运行时签名（找不到则跳过）",
+    )
+    parser.add_argument(
         "--image-size",
         default="0",
         help="模块镜像大小（含 .bss），用于校验 RVA 在合法范围内。"
@@ -300,6 +317,18 @@ def main() -> int:
         print("    先跑 ./tools/20-dump-il2cpp.sh", file=sys.stderr)
         return 1
 
+    main_sig: tuple[int, int] | None = None
+    main_bin = Path(args.main_bin)
+    if main_bin.is_file():
+        import struct as _struct
+
+        head = main_bin.read_bytes()[:16]
+        if len(head) == 16:
+            main_sig = _struct.unpack("<QQ", head)
+            print(f"[*] main 签名: {main_sig[0]:016X} {main_sig[1]:016X}")
+    else:
+        print("[!] 未找到 main.bin，跳过运行时签名（findMainNsoBase 将无签名校验）")
+
     print(f"[*] 解析 {dump_path} …")
     types = parse_dump(dump_path)
     print(f"    共 {len(types)} 个类型")
@@ -307,7 +336,7 @@ def main() -> int:
     targets = json.loads(Path(args.targets).read_text(encoding="utf-8"))
     image_size = int(args.image_size, 0)
 
-    lines, missing = build_header(types, targets, args.build_id, image_size)
+    lines, missing = build_header(types, targets, args.build_id, image_size, main_sig)
 
     if missing:
         print("[x] 必需符号缺失：" + ", ".join(missing), file=sys.stderr)
