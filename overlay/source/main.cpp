@@ -26,6 +26,7 @@ extern "C" {
 #include "saltysd_ipc_sm.h"   // Status-Monitor-Overlay 的 SaltyNX 客户端（Connect/Term/共享内存全套）
 }
 
+#include <cstdio>
 #include <cstring>
 
 #include "../../shared/hud_protocol.h"
@@ -157,6 +158,24 @@ void drawDiagnostic(tsl::gfx::Renderer* renderer, const char* message) {
                        renderer->a(tsl::gfx::Color(0xF, 0x8, 0x8, 0xF)));
 }
 
+/// 调试用：把共享内存前 16 个 u32 画出来（一眼看出插件有没有写、
+/// 别的插件占了哪里）。"等待插件"时自动显示。
+void drawShmemDump(tsl::gfx::Renderer* renderer, const void* base) {
+  const auto* words = static_cast<const uint32_t*>(base);
+  char line[80];
+  for (int row = 0; row < 4; ++row) {
+    std::snprintf(line, sizeof(line), "%03x: %08X %08X %08X %08X", row * 16,
+                  words[row * 4 + 0], words[row * 4 + 1], words[row * 4 + 2],
+                  words[row * 4 + 3]);
+    renderer->drawString(line, true, sshud::BAR_MARGIN_X, 66 + row * 18, 14,
+                         renderer->a(tsl::gfx::Color(0xF, 0xF, 0xF, 0xF)));
+  }
+  std::snprintf(line, sizeof(line), "SSHD magic = %08X%s", SSHUD_MAGIC,
+                g_shmemMapped ? "" : " (map pending)");
+  renderer->drawString(line, false, sshud::BAR_MARGIN_X, 66 + 4 * 18 + 6, 14,
+                       renderer->a(tsl::gfx::Color(0xF, 0xC, 0x4, 0xF)));
+}
+
 // ---------------------------------------------------------------------------
 class HudGui : public tsl::Gui {
  public:
@@ -194,6 +213,9 @@ class HudGui : public tsl::Gui {
   void render(tsl::gfx::Renderer* renderer) {
     if (!attachBlock()) {
       drawDiagnostic(renderer, "等待插件…");
+      if (g_shmemMapped) {
+        drawShmemDump(renderer, shmemGetAddr(&g_shmem));
+      }
       return;
     }
 
