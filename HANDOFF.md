@@ -141,12 +141,18 @@ Core 在 `LoadPlugins()`(`main.c:466`) 之后立刻 `SaltySD_Deinit()`(`:496`)�
 已经在 `main.cpp` 里覆写了 `__libnx_exit`，别动那段。
 插件也不能用游戏的堆，自带了 `g_fakeHeap`。
 
-### 6. overlay 的输入是**复制**，不是移交
+### 6. overlay 的输入是**复制**，不是移交；退出键就是 Tesla 组合键
 
 overlay 进程是 `AppletType_None`，直接读 HID 共享内存，
-所以**游戏和 overlay 会同时收到同一次按键**。
-退出组合键选的是 `L + R + 右摇杆按下`（小骑士用不到右摇杆按下）。
-加热键时务必避开游戏用到的键。
+所以**游戏和 overlay 会同时收到同一次按键**。加热键时务必避开游戏用到的键。
+
+显隐/退出的正确方式（vendored tesla 的 hidPoller 在输入线程层面处理，
+FullMode=false 的输入穿透模式下 Gui::handleInput 根本不会被调用，
+别往里加退出逻辑——实机验证过无效）：
+  - HUD 显示中按 **Tesla 呼出组合键（L+↓+右摇杆按下）或 Home 键** → 隐藏
+  - 隐藏后再按组合键 → 恢复
+  - 常驻期间组合键被本 overlay 独占，Tesla-Menu 不会弹出（预期行为）
+  - 挂起状态下按键无效（整个进程冻结），必须在游戏运行中操作
 
 ---
 

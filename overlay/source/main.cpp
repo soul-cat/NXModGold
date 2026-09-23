@@ -40,10 +40,6 @@ namespace {
 /// 20Hz 是权衡值；endFrame() 仍无条件 waitForVSync()，所以 60 是硬上限。
 constexpr uint8_t REFRESH_HZ = 20;
 
-/// 退出组合键。必须选游戏用不到的组合 —— 因为按键会同时传进游戏。
-/// 小骑士用到 A/B/X/Y/ZL/ZR/L/R/摇杆，右摇杆按下（RS）游戏里没用。
-constexpr uint64_t EXIT_COMBO = HidNpadButton_L | HidNpadButton_R | HidNpadButton_StickR;
-
 SharedMemory g_shmem = {};
 bool g_shmemMapped = false;
 sshud::HudReader g_reader;
@@ -189,15 +185,10 @@ class HudGui : public tsl::Gui {
     return frame;
   }
 
-  bool handleInput(u64 keysDown, u64, const HidTouchState&, HidAnalogStickState,
-                   HidAnalogStickState) override {
-    if ((keysDown & EXIT_COMBO) == EXIT_COMBO) {
-      TeslaFPS = 0;
-      tsl::goBack();
-      return true;
-    }
-    return false;
-  }
+  // 注意：常驻（FullMode=false）+ 输入穿透模式下 handleInput 不会被调用——
+  // 这个 tesla fork 在输入线程层面处理显隐：HUD 显示中按 Tesla 呼出组合键
+  // （L+↓+右摇杆按下）或 Home 键即隐藏，再按恢复（tesla.hpp hidPoller）。
+  // 所以这里不放任何退出逻辑，别再往这里加。
 
  private:
   void render(tsl::gfx::Renderer* renderer) {
