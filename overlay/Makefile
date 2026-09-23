@@ -111,7 +111,14 @@ $(OUTPUT).ovl: $(OUTPUT).nro
 	@echo "安装到 SD 卡:"
 	@echo "  switch/.overlays/$(notdir $@)"
 
+# .ovl 就是 .nro 改个扩展名——nx-ovlloader 按扩展名识别。
+# nro 必须带 --nacp：Tesla-Menu 依赖 NACP 里的标题来列条目，
+# 缺了它 overlay 会被静默跳过（列表里根本不出现）。
+$(OUTPUT).nacp:
+	@nacptool --create "$(APP_TITLE)" "$(APP_AUTHOR)" "$(APP_VERSION)" $@
+
 $(OUTPUT).nro: $(OUTPUT).elf $(OUTPUT).nacp
+	@elf2nro $< $@ --nacp=$(OUTPUT).nacp
 $(OUTPUT).elf: $(OFILES)
 
 %.o: %.cpp
