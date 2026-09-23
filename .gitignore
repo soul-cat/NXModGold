@@ -62,3 +62,11 @@ plugin/*.elf
 plugin/*.map
 plugin/source/offsets.h
 tests/test_layout
+
+# --- C# 工具产物 ---
+bin/
+obj/
+
+# --- python 缓存 ---
+__pycache__/
+*.pyc

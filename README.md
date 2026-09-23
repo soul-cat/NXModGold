@@ -7,7 +7,7 @@
 | 目标游戏 | Hollow Knight: Silksong |
 | Title ID | `010013C00E930000` |
 | 目标平台 | Switch 1（Erista / Mariko）+ Atmosphère |
-| 宿主开发环境 | macOS (Apple Silicon) |
+| 宿主开发环境 | macOS (Intel x86_64) |
 
 ## 为什么需要这个项目
 
@@ -164,8 +164,11 @@ git clone https://github.com/ppkantorski/libultrahand vendor/libultrahand
 
 `overlay/Makefile` 会检查 `setLayerPos` 符号是否存在，拿错版本会直接报错。
 
-macOS arm64 上 devkitPro 原生包是否原生 arm64 未经确认（官网被 Cloudflare 挡）。
-确定可用的路径是 Docker（`devkitpro/devkita64` 确认有 `linux/arm64` manifest）：
+devkitPro 原生 macOS 包的可用性未确认（官网被 Cloudflare 挡；Intel x86_64
+历史上受支持，但维护者已不常测 Intel mac，现状未知，装上 dkp-pacman 试一次即知）。
+确定可用的路径是 Docker：`devkitpro/devkita64` 的 `linux/amd64` 与
+`linux/arm64` manifest 均已验证（2026-09，Docker Hub API），Intel Mac 上容器原生运行、
+无仿真开销：
 
 ```bash
 docker run --rm -v "$PWD:/work" -w /work devkitpro/devkita64:latest make -C plugin

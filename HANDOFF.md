@@ -27,8 +27,12 @@ PC 端有成熟 mod 但**完全无法移植**（PC 是 Unity Mono，Switch 是 I
 | **ARM64 指令重定位** | `plugin/source/arm64_reloc.hpp` | `test_reloc` 4 万余条性质验证，参考编码来自系统汇编器 |
 | hook 规划 | `plugin/source/hook_pool.hpp` | `test_hookplan` 6 项 |
 | 血条布局 | `overlay/source/hud_layout.hpp` | `test_layout` 11 项 |
-| NSO 解析 / LZ4 | `tools/nsotool.py` | 17 个手工向量自检 |
-| 偏移生成 | `tools/30-gen-offsets.py` | fixture + 2 条失败路径 |
+| NSO 解析 / LZ4 | `tools/nsotool.py` | 17 个手工向量自检；真实 dump 已与参考 lz4 库逐字节比对 |
+| 容器解包(NSP/NSZ/XCI) | `tools/05-unpack-container.sh` + nstool/nsz | 真实 base+update 全流程，NCA 哈希与 cnmt 一致 |
+| NCA 压缩分区读取 | `tools/ncaext`(LibHac) | 6.2GB RomFS 完整导出，metadata v31 魔数/版本正确 |
+| registration 定位 | `tools/find-il2cpp-registrations.py` | 产出与 .text ADRP 指令对独立验证一致 |
+| IL2CPP dump | vendor/Il2CppDumper + `tools/il2cppdumper-unity6.patch` | 37MB dump.cs，18.4 万方法 RVA |
+| 偏移生成 | `tools/30-gen-offsets.py` | 字段偏移与 fieldOffsets 原始表独立比对一致 |
 
 随时可跑，不需要游戏转储、不需要 devkitPro：
 
@@ -42,7 +46,7 @@ make -C tests tsan     # ThreadSanitizer
 
 `plugin/source/main.cpp`、`overlay/source/main.cpp`、两个 `Makefile`。
 
-原因：开发机是 macOS arm64，没装 devkitPro，也没装 Docker。
+原因：开发机（macOS，现为 Intel x86_64）没装 devkitPro，也没装 Docker。
 这些文件是纸面正确、未经编译器检验。**接手第一件事就是让它们编译过。**
 
 可测的部分我都刻意拆成了纯函数（重定位、hook 规划、布局、协议读写），
@@ -61,24 +65,26 @@ make -C tests tsan     # ThreadSanitizer
 
 ## 卡在哪
 
-**唯一的外部阻塞是游戏转储。** 需要主机在手边，用 nxdumptool 导出
-ExeFS（拿 `main`）和 RomFS（拿 `global-metadata.dat`）。
-
-拿到之后：
+**不再卡。** 2026-09-23 全流水线已打通：用户提供 base NSP + 更新档 NSZ，
+`offsets.h` 已生成（Build ID `FC9EA4CCC955D579`，对应 v1.0.3 / 655360）。
+下一步是编译两个 `main.cpp`（原生 devkitPro 路线，需要 sudo 装 dkp-pacman）
+和实机验证。
 
 ```bash
-./tools/00-setup.sh                # 装 devkitPro + .NET
-./tools/10-extract.sh <转储目录>    # 输出 Build ID 与段布局
-./tools/20-dump-il2cpp.sh          # 跑 Il2CppDumper
-./tools/30-gen-offsets.py --build-id <BID> --image-size <size>
+./tools/00-setup.sh                  # .NET 等依赖（devkitPro 部分手动）
+./tools/05-unpack-container.sh --keys datas/prod.keys <base.nsp> <update.nsz>
+./tools/10-extract.sh work/dump      # Build ID + 段布局
+./tools/20-dump-il2cpp.sh            # 自动打补丁 + 自动定位 registration
+./tools/30-gen-offsets.py --dump work/il2cpp/dump.cs \
+    --build-id FC9EA4CCC955D579 --image-size 0x83CE000
 ```
 
 产出 `plugin/source/offsets.h`（不入库，游戏更新后重新生成）。
-在这之前插件编译不过 —— `Makefile` 的 `check-offsets` 会明确提示。
+**注意：偏移只对应这个 Build ID；实机必须装同一版本，否则 verifyBuildId 拒载。**
 
 ---
 
-## 六个会浪费你时间的坑
+## 六个会浪费你时间的坑（+ Unity 6 转储四坑，见下）
 
 按踩中概率排序。每条都有一手出处，不是猜的。
 
@@ -155,6 +161,30 @@ overlay 进程是 `AppletType_None`，直接读 HID 共享内存，
 5. **Build ID 不匹配就什么都不做。** 拿错版本的偏移去写代码段会直接崩游戏。
    `main.cpp:verifyBuildId` 是最后一道闸。
 
+### Unity 6 转储四坑（2026-09 一手踩坑记录，全部已解）
+
+1. **NCA 压缩分区（固件 16+）**：Silksong 的 RomFS 用了 CompressionInfo 压缩存储，
+   nstool 连最新开发分支都不支持（只写了 sparse 不支持，压缩压根没实现）。
+   任何"Hash layer N failed hash verification"都是这个。**解法：`tools/ncaext`**
+   （C# + LibHac `Ryujinx.LibHac` 0.20.0 NuGet，模拟器同源实现）。注意 LibHac 的
+   ExternalKeySet 存**加密**titlekey（GetDecryptedTitleKey 内部解），注入解密后的会全盘乱码。
+2. **更新档 RomFS 是增量（BKTR/AesCtrEx）**：必须叠在 base 之上重建
+   （LibHac `OpenFileSystemWithPatch`）。base NSP 和 update NSZ 都要给。
+   NSZ 要先经 nsz 工具（venv 自动建）解回 NSP。
+3. **Il2CppDumper/Il2CppInspector(Redux) 自动搜索全灭**：Unity 6 把 metadata 的
+   image 数（78，含 `__Generated`）与二进制 codeGenModules 数（80）解耦了，
+   工具的 `count == imageCount` 硬校验永远失败。**解法：`tools/find-il2cpp-registrations.py`**
+   定位两个 registration 地址喂手动模式；`20-dump-il2cpp.sh` 已自动化此流程。
+   该脚本还会自动应用 `tools/il2cppdumper-unity6.patch`（逐类型容错 + codegen
+   附加类型占位——否则一个类型炸掉整个 image 的输出）。
+4. **Unity 6 有 786 个 codegen 附加类型**（klassIndex ≥ metadata typeDefs.Length），
+   另有 `__Generated` 附加模块。都无害，patch 后按占位处理。
+
+其它细节：metadata 里 `HitInstance` 等结构在 Switch RomFS 的路径是扁平的
+（`/Data/Managed/Metadata/global-metadata.dat`）；bash 3.2（macOS 自带）会把
+全角括号当变量名字符——`$var（`必须写成 `${var}（`；nstool 解不出分区时
+**返回 0**，只能靠产物判断成败。
+
 ---
 
 ## 有风险的地方（实机才能验证）
@@ -188,8 +218,12 @@ not verified patterns."** —— NX-FPS 和 lsfg-nx 全是 GOT 导入表替换�
 
 ### 其他未确认项
 
-- devkitPro 的 macOS 包是否原生 arm64（官网被 Cloudflare 挡）。
-  **确定可用的是 Docker**：`devkitpro/devkita64` 确认有 `linux/arm64` manifest。
+- devkitPro 原生 macOS 包的可用性（官网被 Cloudflare 挡，无法离线验证；
+  Intel x86_64 历史上受支持，但维护者已不常测 Intel mac，2026 现状未知，
+  装上 dkp-pacman 跑一次 `dkp-pacman -S switch-dev` 即知）。
+  **确定可用的是 Docker**：`devkitpro/devkita64` 的 `linux/amd64` 与
+  `linux/arm64` manifest 均已验证（2026-09，Docker Hub API）。
+  Intel Mac 上容器原生运行，无仿真开销。
 - Silksong 的 NSO 是否用 zstd/zbic 压缩（header flag bit 7）。
   若用了，`nsotool.py`、Il2CppDumper、Il2CppInspectorRedux **三者全部卡住**，
   因为都只实现了 LZ4。`nsotool.py` 会明确报错而不是解出垃圾。
@@ -205,7 +239,7 @@ not verified patterns."** —— NX-FPS 和 lsfg-nx 全是 GOT 导入表替换�
 | SaltyNX | **≥ 1.7.3** | 1.5.0 才修好 Unity 6（更新日志点名 Silksong），1.7.3 正式修了 Unity 6 依赖的 `GetAllModuleInfo` |
 | libtesla | **ppkantorski/libultrahand** | 上游 WerWolv/libtesla 做不到常驻 + 输入穿透，`overlay/Makefile` 会检查 |
 | Il2CppDumper | 上游 Perfare v6.7.46 | Silksong 是 Unity 6000.0.50f1 → metadata v31，**不需要第三方分支** |
-| 开发机 | 任意 + Docker | `devkitpro/devkita64` 原生支持 arm64 |
+| 开发机 | 任意 + Docker | `devkitpro/devkita64` 有 linux/amd64 与 linux/arm64 双 manifest（2026-09 验证） |
 
 安装路径注意大小写：
 
@@ -220,11 +254,12 @@ SD:/switch/.overlays/sshud-overlay.ovl
 
 ## 建议的推进顺序
 
-1. **先让两个 `main.cpp` 编译过**（Docker 路线最省事）。这一步会暴露
-   头文件路径和 API 签名的问题。
+1. **先让两个 `main.cpp` 编译过**（原生 devkitPro：装 dkp-pacman.pkg +
+   `dkp-pacman -S switch-dev`；Intel mac 上 Docker amd64 是已验证的退路）。
 2. 试 `FindSymbolBuiltin("il2cpp_resolve_icall")` 拿 main 基址，
    能成就去掉 `+0x4000` 的启发式。
-3. 转储游戏，跑完流水线拿到 `offsets.h`。
+3. ~~转储游戏~~ **已完成**（v1.0.3，Build ID `FC9EA4CCC955D579`，offsets.h 在位）。
+   游戏更新后重跑 05→10→20→30 四步即可。
 4. **先只装 overlay，不装插件** —— 应该显示"等待插件…"。
    这验证了 overlay 的常驻层和 libtesla 配置没问题。
 5. 再装插件。看 overlay 显示的诊断走到哪一步

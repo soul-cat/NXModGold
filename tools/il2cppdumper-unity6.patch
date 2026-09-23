@@ -1,0 +1,67 @@
+diff --git a/Il2CppDumper/Outputs/Il2CppDecompiler.cs b/Il2CppDumper/Outputs/Il2CppDecompiler.cs
+index a3cfe3d..b323ca8 100644
+--- a/Il2CppDumper/Outputs/Il2CppDecompiler.cs
++++ b/Il2CppDumper/Outputs/Il2CppDecompiler.cs
+@@ -34,12 +34,12 @@ namespace Il2CppDumper
+             //dump type
+             foreach (var imageDef in metadata.imageDefs)
+             {
+-                try
+-                {
+-                    var imageName = metadata.GetStringFromIndex(imageDef.nameIndex);
++                var imageName = metadata.GetStringFromIndex(imageDef.nameIndex);
+                     var typeEnd = imageDef.typeStart + imageDef.typeCount;
+                     for (int typeDefIndex = imageDef.typeStart; typeDefIndex < typeEnd; typeDefIndex++)
+                     {
++                        try
++                        {
+                         var typeDef = metadata.typeDefs[typeDefIndex];
+                         var extends = new List<string>();
+                         if (typeDef.parentIndex >= 0)
+@@ -384,7 +384,6 @@ namespace Il2CppDumper
+                         }
+                         writer.Write("}\n");
+                     }
+-                }
+                 catch (Exception e)
+                 {
+                     Console.WriteLine("ERROR: Some errors in dumping");
+@@ -392,6 +391,7 @@ namespace Il2CppDumper
+                     writer.Write(e);
+                     writer.Write("*/\n}\n");
+                 }
++                }
+             }
+             writer.Close();
+         }
+diff --git a/Il2CppDumper/Utils/Il2CppExecutor.cs b/Il2CppDumper/Utils/Il2CppExecutor.cs
+index 1b9405b..4f4397e 100644
+--- a/Il2CppDumper/Utils/Il2CppExecutor.cs
++++ b/Il2CppDumper/Utils/Il2CppExecutor.cs
+@@ -100,6 +100,11 @@ namespace Il2CppDumper
+                         {
+                             typeDef = GetTypeDefinitionFromIl2CppType(il2CppType);
+                         }
++                        if (typeDef == null)
++                        {
++                            // codegen 附加类型（Unity 6）：metadata 里没有，给个占位名
++                            return str + "<Unity6ExtraType" + il2CppType.data.klassIndex + ">";
++                        }
+                         if (typeDef.declaringTypeIndex != -1)
+                         {
+                             str += GetTypeName(il2Cpp.types[typeDef.declaringTypeIndex], addNamespace, true);
+@@ -300,7 +305,13 @@ namespace Il2CppDumper
+             }
+             else
+             {
+-                return metadata.typeDefs[il2CppType.data.klassIndex];
++                // Unity 6000.0.50f1 (Silksong Switch): 二进制 types[] 里有少量
++                // codegen 附加类型，klassIndex 超出 metadata typeDefs 范围。
++                // 越界时返回 null，调用方按"未知类型"处理而不是崩溃。
++                var idx = il2CppType.data.klassIndex;
++                if (idx >= metadata.typeDefs.Length)
++                    return null;
++                return metadata.typeDefs[idx];
+             }
+         }
+ 

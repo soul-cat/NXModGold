@@ -50,6 +50,17 @@ EOF
 fi
 printf "  %s%s%s\n" "$DIM" "$DLL" "$RST"
 
+# Unity 6 补丁：逐类型容错 + codegen 附加类型占位（见 tools/il2cppdumper-unity6.patch）
+if git -C "$(dirname "$DLL")/../../.." apply --check "$REPO/tools/il2cppdumper-unity6.patch" 2>/dev/null; then
+  step "应用 Unity 6 兼容补丁"
+  git -C "$(dirname "$DLL")/../../.." apply "$REPO/tools/il2cppdumper-unity6.patch" \
+    || die "补丁应用失败"
+  dotnet build "$(dirname "$DLL")/../.." -c Release -v q >/dev/null \
+    || die "补丁后重新构建失败"
+else
+  printf "  %s补丁已应用（或无需应用）%s\n" "$DIM" "$RST"
+fi
+
 # ---------------------------------------------------------------- config.json
 # config.json 从 AppDomain.CurrentDomain.BaseDirectory 读取，必须和 dll 同目录。
 # RequireAnyKey 必须关掉，否则结束时会卡在 Console.ReadKey 上永不退出。
@@ -82,7 +93,20 @@ printf "  %s输出: %s%s\n" "$DIM" "$OUT" "$RST"
 
 # 参数顺序无所谓：metadata 靠 magic 0xFAB11BAF 识别，目录识别为输出目录。
 # DOTNET_ROLL_FORWARD 必须设：预编译包 target net6/net7，而本机通常只有新版运行时。
-DOTNET_ROLL_FORWARD=LatestMajor dotnet "$DLL" "$NSO" "$META" "$OUT"
+# Unity 6 下自动搜索必然失败（image 数与 codeGenModules 数解耦），失败后用
+# tools/find-il2cpp-registrations.py 定位地址走手动模式。
+set +e
+DOTNET_ROLL_FORWARD=LatestMajor dotnet "$DLL" "$NSO" "$META" "$OUT" > /tmp/il2cppdump.log 2>&1
+rc=$?
+set -e
+grep -v "^\[OPEN\]" /tmp/il2cppdump.log | tail -8 | sed 's/^/  /'
+if grep -q "Can't use auto mode" /tmp/il2cppdump.log; then
+  step "自动搜索失败（Unity 6 预期行为），定位 registration 地址"
+  REGS="$(python3 "$REPO/tools/find-il2cpp-registrations.py" "$WORK/main.bin" 2>/dev/null | tail -2)"
+  [ -n "$REGS" ] || die "registration 定位失败"
+  printf "  %s%s%s\n" "$DIM" "$REGS" "$RST"
+  printf '%s\n' "$REGS" | DOTNET_ROLL_FORWARD=LatestMajor dotnet "$DLL" "$NSO" "$META" "$OUT" 2>&1 | tail -5
+fi
 
 # ---------------------------------------------------------------- 校验
 step "校验产物"

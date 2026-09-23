@@ -39,7 +39,9 @@ RE_TYPE = re.compile(
     r"(?:public|private|internal|protected)?\s*"
     r"(?:static\s+|sealed\s+|abstract\s+|readonly\s+)*"
     r"(?:class|struct|interface|enum)\s+"
-    r"([A-Za-z_][A-Za-z0-9_]*)"
+    # 名字允许含点：嵌套类型以 "外类.内类" 形式声明（如 HitInstance.<Foo>d__12），
+    # 若只截到点前会覆盖同名的顶层类型。
+    r"([A-Za-z_][A-Za-z0-9_.]*)"
 )
 RE_FIELD = re.compile(r"^\s*.*?\b([A-Za-z_][A-Za-z0-9_]*)\s*;\s*//\s*(0x[0-9A-Fa-f]+)\s*$")
 RE_RVA = re.compile(
@@ -77,8 +79,28 @@ def parse_dump(path: Path) -> dict[tuple[str, str], TypeInfo]:
     depth = 0
 
     with path.open("r", encoding="utf-8", errors="replace") as handle:
+        in_comment = False
         for raw_line in handle:
             line = raw_line.rstrip("\n")
+
+            # 跳过 /* ... */ 块注释：Il2CppDumper 会把解析异常以注释形式内嵌，
+            # 注释文本（C# 异常栈/类型签名）可能含不平衡的花括号，会干扰深度追踪。
+            if in_comment:
+                if "*/" not in line:
+                    continue
+                line = line.split("*/", 1)[1]
+                in_comment = False
+                if not line.strip():
+                    continue
+            elif "/*" in line:
+                head, _, tail = line.partition("/*")
+                if "*/" not in tail:
+                    in_comment = True
+                else:
+                    head += tail.split("*/", 1)[1]
+                line = head
+                if not line.strip():
+                    continue
 
             ns_match = RE_NAMESPACE.match(line)
             if ns_match is not None:

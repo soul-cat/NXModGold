@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 一次性环境准备：devkitPro（交叉编译 ARM64 Switch 目标）+ .NET（跑 Il2CppDumper）
-# macOS Apple Silicon。幂等，可重复执行。
+# macOS（Intel / Apple Silicon）。幂等，可重复执行。
+# 注意：devkitPro 的原生 macOS 包可用性未确认（见 HANDOFF「未确认项」），
+# 若 dkp-pacman 装不上工具链，退路是 Docker（devkitpro/devkita64，amd64/arm64 双 manifest）。
 set -euo pipefail
 
 BOLD=$'\033[1m'; DIM=$'\033[2m'; GRN=$'\033[32m'; YEL=$'\033[33m'; RED=$'\033[31m'; RST=$'\033[0m'

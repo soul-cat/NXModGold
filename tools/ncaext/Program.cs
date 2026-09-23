@@ -1,0 +1,117 @@
+// 从（可能压缩/增量更新的）Silksong NCA 里抽出 RomFS 文件。
+// 用法: ncaext <prod.keys> <title.keys> <base.nca> <upd.nca|-> <输出文件> [RomFS内路径]
+// 依赖 LibHac：nstool 不支持固件 16+ 的 NCA 压缩分区，LibHac 是唯一能完整读取的库。
+using System;
+using System.IO;
+using LibHac.Common;
+using LibHac.Common.Keys;
+using LibHac.Fs;
+using LibHac.Fs.Fsa;
+using LibHac.FsSystem;
+using LibHac.Tools.Fs;
+using LibHac.Tools.FsSystem;
+using LibHac.Tools.FsSystem.NcaUtils;
+
+class Program
+{
+    static int Main(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            Console.Error.WriteLine("用法: ncaext <prod.keys> <title.keys> <base.nca> <upd.nca|-> <输出> [RomFS内路径]");
+            return 2;
+        }
+        string prodKeys = args[0], titleKeys = args[1], baseNca = args[2], updNca = args[3], outFile = args[4];
+        string innerPath = args.Length > 5 ? args[5] : "/Data/il2cpp_data/Metadata/global-metadata.dat";
+
+        if (args.Length > 3 && args[^1] == "--extract-all")
+        {
+            ExtractAll(prodKeys, titleKeys, baseNca, updNca, args[4]);
+            return 0;
+        }
+
+        KeySet keyset = KeySet.CreateDefaultKeySet();
+        ExternalKeyReader.ReadKeyFile(keyset, prodKeys, null, null, null);
+        // 注入 titlekey：LibHac 的 ReadTitleKeys 对我们这份 title.keys 解析不出（原因未查），
+        // 干脆自己解析 + 用 TitleKeks 解密后直接塞进 ExternalKeySet。
+        // title.keys 每行: <RightsId 32hex>: <加密titlekey 32hex>: <世代>
+        foreach (var line in File.ReadAllLines(titleKeys))
+        {
+            var parts = line.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length < 3 || parts[0].Length != 32 || parts[1].Length != 32) continue;
+            int gen = int.Parse(parts[2]);
+            var rid = Convert.FromHexString(parts[0]);
+            var enc = Convert.FromHexString(parts[1]);
+            // ExternalKeySet 存加密 titlekey，LibHac 在 GetDecryptedTitleKey 里用 TitleKeks 自行解密
+            keyset.ExternalKeySet.Add(new RightsId(rid), new LibHac.Spl.AccessKey(enc));
+            Console.Error.WriteLine($"[debug] titlekey {parts[0]} gen {gen} 已注入(加密形态)");
+        }
+
+        IFileSystem romfs;
+        using (var bs = new LocalStorage(baseNca, FileAccess.Read))
+        {
+            var baseN = new Nca(keyset, bs);
+            if (updNca == "-")
+            {
+                romfs = baseN.OpenFileSystem(NcaSectionType.Data, IntegrityCheckLevel.None);
+            }
+            else
+            {
+                using (var us = new LocalStorage(updNca, FileAccess.Read))
+                {
+                    var updN = new Nca(keyset, us);
+                    romfs = updN.OpenFileSystemWithPatch(baseN, NcaSectionType.Data, IntegrityCheckLevel.None);
+                }
+            }
+        }
+
+        if (!romfs.FileExists(innerPath))
+        {
+            var tried = new[] { innerPath, "/Metadata/global-metadata.dat", "/global-metadata.dat",
+                                "/Data/il2cpp_data/Metadata/global-metadata.dat" };
+            foreach (var cand in tried)
+            {
+                var probe = new UniqueRef<IFile>();
+                if (romfs.OpenFile(ref probe, cand.ToU8Span(), OpenMode.Read).IsSuccess())
+                {
+                    Console.Error.WriteLine($"[hit] 实际路径: {cand}");
+                    innerPath = cand;
+                    goto found;
+                }
+            }
+            Console.Error.WriteLine("候选路径全部失败");
+            return 1;
+        }
+        found:;
+        var file = new UniqueRef<IFile>();
+        romfs.OpenFile(ref file, innerPath.ToU8Span(), OpenMode.Read).ThrowIfFailure();
+        using var stream = file.Get.AsStream();
+        using var outF = File.Create(outFile);
+        stream.CopyTo(outF);
+        Console.WriteLine($"{innerPath} -> {outFile} ({outF.Length} bytes)");
+        return 0;
+    }
+
+    static void ExtractAll(string prodKeys, string titleKeys, string baseNca, string updNca, string destDir)
+    {
+        var keyset = KeySet.CreateDefaultKeySet();
+        ExternalKeyReader.ReadKeyFile(keyset, prodKeys, null, null, null);
+        foreach (var line in File.ReadAllLines(titleKeys))
+        {
+            var parts = line.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length < 3 || parts[0].Length != 32 || parts[1].Length != 32) continue;
+            keyset.ExternalKeySet.Add(new RightsId(Convert.FromHexString(parts[0])),
+                                      new LibHac.Spl.AccessKey(Convert.FromHexString(parts[1])));
+        }
+        using (var bs = new LocalStorage(baseNca, FileAccess.Read))
+        {
+            var baseN = new Nca(keyset, bs);
+            IFileSystem romfs = updNca == "-"
+                ? baseN.OpenFileSystem(NcaSectionType.Data, IntegrityCheckLevel.None)
+                : new Nca(keyset, new LocalStorage(updNca, FileAccess.Read))
+                    .OpenFileSystemWithPatch(baseN, NcaSectionType.Data, IntegrityCheckLevel.None);
+            FileSystemExtensions.Extract(romfs, destDir, null);
+            Console.WriteLine($"extracted -> {destDir}");
+        }
+    }
+}
