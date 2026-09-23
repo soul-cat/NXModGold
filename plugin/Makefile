@@ -13,10 +13,15 @@ endif
 
 include $(DEVKITPRO)/libnx/switch_rules
 
+# 工具链前缀（switch_rules 提供 PORTLIBS 等，但工具名自己拼）
+TOOLPREFIX := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
+SIZE       := $(TOOLPREFIX)size
+STRIP      := $(TOOLPREFIX)strip
+
 TARGET   := sshud
 BUILD    := build
 SOURCES  := source
-INCLUDES := source ../shared
+INCLUDES := source ../shared shim
 
 # SaltyNX 的头文件路径。默认指向 vendor/ 下克隆的仓库；
 # 放在别处就在命令行传 SALTYNX_SRC=<path>。
@@ -97,8 +102,10 @@ $(OUTPUT).elf: $(OFILES)
 	@echo
 	@echo "构建完成: $@"
 	@$(NM) $@ | grep -q ' T main' || { echo "错误: main 未导出"; exit 1; }
-	@SIZE=$$($(SIZE) -A $@ | awk '/Total/ {print $$2}'); \
-	 echo "  大小: $$SIZE 字节"; \
+	@$(STRIP) $@ -o $@.stripped; \
+	 SIZE=$$(wc -c < $@.stripped | tr -d ' '); \
+	 echo "  strip 后大小: $$SIZE 字节"; \
+	 rm -f $@.stripped; \
 	 if [ $$SIZE -gt 2097152 ]; then \
 	   echo "  错误: 超过 SaltyNX 的 2 MiB 上限"; exit 1; \
 	 fi

@@ -21,6 +21,11 @@ INCLUDES := source ../shared
 
 LIBTESLA_DIR ?= $(TOPDIR)/../vendor/libultrahand/libtesla/include
 INCLUDES += $(LIBTESLA_DIR)
+# tesla.hpp 依赖同仓库 libultra 的 ultra.hpp
+INCLUDES += $(TOPDIR)/../vendor/libultrahand/libultra/include
+INCLUDES += $(TOPDIR)/../vendor/libultrahand/common
+# minizip 无官方包，stub 见 overlay/shim/（不用下载/解压功能）
+INCLUDES += $(TOPDIR)/shim
 
 # SaltyNX 的 IPC 头（overlay 侧要用 SaltySD_Connect / GetSharedMemoryHandle）
 SALTYNX_SRC ?= $(TOPDIR)/../vendor/SaltyNX/saltysd_core/source
@@ -39,7 +44,9 @@ CXXFLAGS := $(CFLAGS) -fno-rtti -fexceptions -std=gnu++20
 ASFLAGS  := -g $(ARCH)
 LDFLAGS   = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS     := -lnx
+# libultrahand 头文件链会引入 curl/zlib/mbedtls 符号（即便不用下载功能，
+# tesla 部分实现引用了它们），见其 README:109-156
+LIBS     := -lcurl -lz -lmbedtls -lmbedx509 -lmbedcrypto -lnx
 LIBDIRS  := $(PORTLIBS) $(LIBNX)
 
 #---------------------------------------------------------------------------------

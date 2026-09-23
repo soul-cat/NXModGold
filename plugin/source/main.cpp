@@ -18,6 +18,7 @@
 
 #include <switch.h>
 
+#include <cstdio>
 #include <cstring>
 
 #include "../../shared/hud_protocol.h"
@@ -30,9 +31,9 @@
 // （不要用 NX-FPS 的 include/saltysd/，那份已经过期：
 //   它把 SaltySD_Init 声明成 void，实际返回 Result）
 extern "C" {
-#include "saltysd_core.h"
+#include "saltysd/saltysd_core.h"
 #include "saltysd_dynamic.h"
-#include "saltysd_ipc.h"
+#include "saltysd/saltysd_ipc.h"
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,14 @@ extern "C" {
 // 这是 NX-FPS 验证过的写法（NX-FPS/source/main.cpp:71-96）。
 // ---------------------------------------------------------------------------
 extern "C" {
+
+// libnx crt0/runtime 的符号（C++ 下必须显式声明，不能靠隐式声明）
+extern char* fake_heap_start;
+extern char* fake_heap_end;
+extern void __libc_init_array(void);
+extern void __libc_fini_array(void);
+extern void virtmemSetup(void);
+__attribute__((noreturn)) void __nx_exit(int rc, void* savedLr);
 
 // 插件不能动游戏的堆，自己带一块。
 // 我们全程不做动态分配，1 页足够 libc 初始化用。
@@ -64,7 +73,7 @@ void __libnx_init(void* ctx, Handle mainThread, void* savedLr) {
   virtmemSetup();
 }
 
-void __attribute__((weak)) NORETURN __libnx_exit(int rc) {
+void __attribute__((weak, noreturn)) __libnx_exit(int rc) {
   (void)rc;
   __libc_fini_array();
   __nx_exit(0, g_origSavedLr);  // libnx 的 __nx_exit 执行 `br x1`
@@ -87,7 +96,9 @@ namespace {
 // 用 ret 填充：万一某槽位没被正确写入就被跳进去，干净返回而不是执行垃圾。
 // volatile 防止编译器认为内容恒定而把读取优化掉。
 // ---------------------------------------------------------------------------
-__attribute__((section(".text.sshud_pool"), used, aligned(16)))
+// section flags 必须显式给 "ax"：volatile 数组默认继承 RW 属性，与 .text.*
+// 名字冲突时会被链接器静默丢弃（不进任何 LOAD 段，SaltySD_Memcpy 时才炸）。
+__attribute__((section(".text.sshud_pool,\"ax\""), used, aligned(16)))
 volatile uint32_t g_trampolinePool[sshud::MAX_HOOKS][sshud::POOL_SLOT_WORDS] = {
     {sshud::POOL_FILLER, sshud::POOL_FILLER, sshud::POOL_FILLER, sshud::POOL_FILLER,
      sshud::POOL_FILLER, sshud::POOL_FILLER, sshud::POOL_FILLER, sshud::POOL_FILLER},
@@ -181,9 +192,12 @@ uint64_t findMainNsoBase() {
 /// Build ID 一变，所有 RVA 全部作废。宁可什么都不做，也绝不能拿错误的
 /// 偏移去 patch 别的版本 —— 那是直接崩游戏甚至损坏存档。
 bool verifyBuildId() {
-  char buildId[0x11] = {};
-  if (R_FAILED(SaltySD_GetBID(buildId))) return false;
-  return std::strncmp(buildId, SS_BUILD_ID_STR, 16) == 0;
+  // SaltySD_GetBID() 返回 build id 前 8 字节（u64），无参数。
+  u64 buildId = SaltySD_GetBID();
+  if (buildId == 0) return false;
+  char buf[0x11] = {};
+  std::snprintf(buf, sizeof(buf), "%016lX", buildId);
+  return std::strncmp(buf, SS_BUILD_ID_STR, 16) == 0;
 }
 
 /// 申请共享内存里属于我们的一小块，并建立映射。
