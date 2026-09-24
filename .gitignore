@@ -58,6 +58,7 @@ tests/test_seqlock_tsan
 tests/test_reloc
 tests/test_hookplan
 plugin/build/
+exl/deploy/
 plugin/*.elf
 plugin/*.map
 plugin/source/offsets.h

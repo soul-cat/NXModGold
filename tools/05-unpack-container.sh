@@ -261,6 +261,15 @@ step "组装转储目录"
 rm -rf "$DUMP"
 mkdir -p "$DUMP/ExeFS" "$DUMP/RomFS"
 cp "${C_EXEFS[$best]}/main" "$DUMP/ExeFS/main"
+# main.npdm：exl/ 构建要在它基础上补 SVC（tools/40-patch-npdm.py）
+if [ -f "${C_EXEFS[$best]}/main.npdm" ]; then
+  cp "${C_EXEFS[$best]}/main.npdm" "$DUMP/ExeFS/main.npdm"
+else
+  warn "exefs 里没有 main.npdm —— exl/ 版无法组装 deploy/"
+fi
+# exl/ 版以 subsdk9 注入；游戏若自带同名模块会被覆盖
+[ -f "${C_EXEFS[$best]}/subsdk9" ] && warn "游戏 exefs 自带 subsdk9，exl/ 版会与它冲突"
+printf "  %sexefs: %s%s\n" "$DIM" "$(ls "${C_EXEFS[$best]}" | tr '\n' ' ')" "$RST"
 cp "$meta_dat" "$DUMP/RomFS/global-metadata.dat"
 ls -lh "$DUMP/ExeFS" "$DUMP/RomFS" | sed 's/^/  /'
 
