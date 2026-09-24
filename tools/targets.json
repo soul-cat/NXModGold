@@ -155,6 +155,13 @@
       "class": "EnemyJournalRecord",
       "field": "killsRequired",
       "required": true
+    },
+    {
+      "name": "HM_ACTIVELIST_STATIC",
+      "class": "HealthManager",
+      "field": "_activeHealthManagers",
+      "required": true,
+      "_note": "静态字段：场上激活的 HealthManager 列表（相对 static_fields）"
     }
   ],
   "methods": [
@@ -650,6 +657,14 @@
       "method": "get_activeInHierarchy",
       "required": true,
       "_note": "没买区域地图时，游戏不激活该区域的地图块"
+    },
+    {
+      "name": "DBT_ONENTER",
+      "class": "DisplayBossTitle",
+      "namespace": "HutongGames.PlayMaker.Actions",
+      "method": "OnEnter",
+      "required": true,
+      "_note": "BOSS 战开场显示大标题"
     }
   ],
   "script": [
@@ -681,6 +696,12 @@
       "name": "PDC_INT_TRYGETVALUE_MI",
       "kind": "metadata_slot",
       "script_name": "Method$SceneData.PersistentItemDataCollection<int, SceneData.SerializableIntData>.TryGetValue()"
+    },
+    {
+      "name": "HM_TYPEINFO",
+      "kind": "type_slot",
+      "script_name": "HealthManager_TypeInfo",
+      "_note": "槽 → Il2CppClass*；+0xB8 static_fields（HealthManager.OnEnable 反汇编核实）"
     }
   ]
 }

@@ -12,7 +12,7 @@ namespace sshud::hud {
 
 // ---------------------------------------------------------------- PC 默认值
 constexpr int32_t BOSS_HP_THRESHOLD = 105;   // 初始最大血量 > 此值 → BOSS 样式
-constexpr float HIDE_DELAY_SECONDS = 1.5f;   // 最后一次掉血后多久隐藏
+constexpr float HIDE_DELAY_SECONDS = 1.5f;   // 普通敌人最后一次掉血后多久隐藏（BOSS 条不按时间隐藏）
 constexpr float POPUP_DURATION_SECONDS = 2.0f;
 constexpr float POPUP_RISE_UNITS = 1.4f;     // 飘字上升的世界单位
 constexpr float POPUP_START_OFFSET_UNITS = 1.0f;
@@ -118,7 +118,7 @@ class HudModel {
 
   void expire(float now) {
     for (Enemy& enemy : enemies_) {
-      if (enemy.active && now - enemy.lastHitAt >= HIDE_DELAY_SECONDS) enemy = Enemy{};
+      if (enemy.active && !isBoss(enemy.maxHp) && now - enemy.lastHitAt >= HIDE_DELAY_SECONDS) enemy = Enemy{};
     }
     for (Popup& popup : popups_) {
       if (popup.active && now - popup.startedAt >= POPUP_DURATION_SECONDS) popup = Popup{};

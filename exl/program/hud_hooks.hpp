@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "boss_detect.hpp"
 #include "hud_draw.hpp"
 #include "hud_model.hpp"
 #include "lib.hpp"
@@ -73,6 +74,7 @@ HOOK_DEFINE_TRAMPOLINE(CameraLateUpdateHook) {
     Orig(self, method);
     sshud::sdlog::start();
     sshud::toggles::pollInput(sshud::unity::unscaledTime());
+    sshud::hud::scanForBosses(sshud::hud::g_model, sshud::unity::unscaledTime());
     void* gui = sshud::unity::ensurePlayMakerGui();
     if (!s_announced && gui != nullptr) {
       s_announced = true;
@@ -99,7 +101,8 @@ inline void installHooks() {
   TakeDamageHook::InstallAtOffset(HM_TAKEDAMAGE);
   CameraLateUpdateHook::InstallAtOffset(CAMCTRL_LATEUPDATE);
   PlayMakerOnGuiHook::InstallAtOffset(PMGUI_ONGUI);
-  Logging.Log("[sshud] hooks installed: TakeDamage, CameraController.LateUpdate, PlayMakerGUI.OnGUI");
+  BossTitleHook::InstallAtOffset(DBT_ONENTER);
+  Logging.Log("[sshud] hooks installed: TakeDamage, CameraController.LateUpdate, PlayMakerGUI.OnGUI, DisplayBossTitle");
 }
 
 }  // namespace sshud::hud

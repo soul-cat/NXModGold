@@ -140,6 +140,13 @@ inline void setStyleAlignment(ManagedObject style, int32_t anchor) {
 
 // ---------------------------------------------------------------- 字符串
 
+/// 组件所在 GameObject 是否在层级中激活（BOSS 逃跑 / 转阶段时会被停用）
+inline bool isActiveInHierarchy(const void* component) {
+  const void* gameObject = mainFunction<const void* (*)(const void*, const void*)>(COMP_GETGAMEOBJECT)(component, nullptr);
+  return gameObject != nullptr &&
+         mainFunction<bool (*)(const void*, const void*)>(GO_GETACTIVEINHIERARCHY)(gameObject, nullptr);
+}
+
 /// ASCII C 串 → 托管字符串（Marshal.PtrToStringAnsi）
 inline ManagedString asciiString(const char* text) {
   return mainFunction<ManagedString (*)(const char*, const void*)>(MARSHAL_PTRTOSTRANSI)(text, nullptr);

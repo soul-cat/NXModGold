@@ -187,9 +187,9 @@ inline void drawPopup(const Frame& frame, const Popup& popup) {
   drawText(frame, x, y, DAMAGE_FONT_UNITS * ppu, ui::intToString(-popup.damage), color);
 }
 
-/// 敌人已销毁 / 死亡 / 血量归零 → 返回 false，调用方应 forget
+/// 敌人已销毁 / 被停用 / 死亡 / 血量归零 → 返回 false，调用方应 forget
 inline bool readLiveHp(const Enemy& enemy, int32_t& outHp) {
-  if (!ui::isAlive(enemy.manager)) return false;
+  if (!ui::isAlive(enemy.manager) || !ui::isActiveInHierarchy(enemy.manager)) return false;
   if (ui::readField<bool>(enemy.manager, HM_ISDEAD)) return false;
   outHp = ui::readField<int32_t>(enemy.manager, HM_HP);
   return outHp > 0;

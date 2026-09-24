@@ -6,6 +6,8 @@
                   `SceneData.PersistentItemDataCollection<bool, object>$$TryGetValue`）只在这里有。
 - metadata_slot : ScriptMetadataMethod 的槽位地址（`Method$...`）。调用共享泛型实现时，
                   必须把槽里的 MethodInfo* 作为最后一个参数传进去。
+- type_slot     : ScriptMetadata 的类型信息槽（`<Class>_TypeInfo`），槽里是 Il2CppClass*，
+                  读静态字段要经它。
 - first_bl_in   : 某个方法里第一条 BL 的目标。IL2CPP 的
                   `il2cpp_codegen_initialize_runtime_metadata` 没有符号，但每个用到
                   metadata 槽的方法开头都先调它，取第一条 BL 即可。
@@ -30,6 +32,7 @@ class ScriptIndex:
         data = json.loads(path.read_text(encoding="utf-8"))
         self.methods = {entry["Name"]: entry["Address"] for entry in data["ScriptMethod"]}
         self.slots = {entry["Name"]: entry["Address"] for entry in data["ScriptMetadataMethod"]}
+        self.types = {entry["Name"]: entry["Address"] for entry in data["ScriptMetadata"]}
 
 
 def first_bl_target(image: bytes, rva: int) -> int | None:
@@ -51,6 +54,8 @@ def _resolve(spec: dict[str, Any], index: ScriptIndex, image: bytes | None) -> i
         return index.methods.get(name)
     if kind == "metadata_slot":
         return index.slots.get(name)
+    if kind == "type_slot":
+        return index.types.get(name)
     if kind == "first_bl_in":
         rva = index.methods.get(name)
         if rva is None or image is None:

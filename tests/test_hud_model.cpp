@@ -67,6 +67,17 @@ static void testExpireAfterHideDelay() {
   CHECK(!model.popups()[0].active);
 }
 
+static void testBossBarDoesNotTimeOut() {
+  std::printf("test: BOSS 条不按隐藏延迟过期，只能 forget\n");
+  HudModel model;
+  int boss = 0;
+  model.onHit(&boss, BOSS_HP_THRESHOLD + 1, 1.0f);
+  model.expire(1.0f + HIDE_DELAY_SECONDS * 100.0f);
+  CHECK(countActive(model) == 1);
+  model.forget(&boss);
+  CHECK(countActive(model) == 0);
+}
+
 static void testForget() {
   std::printf("test: forget 移除指定敌人\n");
   HudModel model;
@@ -133,6 +144,7 @@ int main() {
   testSameEnemyReusesSlot();
   testEvictsOldestWhenFull();
   testExpireAfterHideDelay();
+  testBossBarDoesNotTimeOut();
   testForget();
   testBossThreshold();
   testBossBarLayout();
