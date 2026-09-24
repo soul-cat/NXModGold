@@ -122,7 +122,7 @@ trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路�
 | `tools/40-patch-npdm.py` 补 SVC | ✅ 自检：与 npdmtool 逐字节一致、幂等、子段后移 |
 | 用游戏原版 npdm 组装 deploy/ | ✅ 原版缺的正是那 4 个 SVC |
 | Ryujinx 加载、Build ID 匹配、TakeDamage hook 安装、游戏继续运行 | ✅ 2026-09-24 日志确认 |
-| 打怪时 hit 日志、hp/initHp 数值合理 | ❓ 需要进游戏操作 |
+| 打怪时 hit 日志、hp/initHp 数值合理 | ✅ 同一敌人连续三击 `hp 130→117→104→91 / 130 dmg 13 hero=1`，前后衔接一致 |
 | 绘制 | 未做（本版只打日志） |
 
 要点：
@@ -134,6 +134,11 @@ trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路�
 - **Ryujinx 必须用 `memory_manager_mode: SoftwarePageTable`**：HostMapped /
   HostMappedUnsafe 下 `svcMapProcessMemory` 不是真别名，exlaunch 的
   `RwPages` 断言 `memcmp(m_Ro, m_Rw)==0` 失败、不装 hook。实机无此问题。
+- **性能**：关 Hypervisor（JIT）+ SoftwarePageTable 两项叠加明显变慢，首次进新地图
+  要现编译大量代码，可能黑屏较久；内存紧张时更严重（2026-09-24 实测空闲内存
+  ~90MB、大量换页）。只玩不测 mod 时可把 `memory_manager_mode` 改回
+  `HostMappedUnsafe`（hook 不会装，但不会崩）。根治需要改 Ryujinx 让 HostMapped
+  支持 `svcMapProcessMemory` 真别名。
 - **Ryujinx 必须关 Hypervisor**（`use_hypervisor: false`）：Unity GC 跨线程
   `svcGetThreadContext3` 在 Apple Hypervisor 上返回 BadArgument 直接崩（与 mod 无关）。
 - **main.npdm 必须基于游戏原版**：exlaunch 要 svcMapProcessMemory 等 4 个
