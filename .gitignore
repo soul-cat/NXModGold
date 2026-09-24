@@ -76,3 +76,6 @@ obj/
 __pycache__/
 *.pyc
 *.log
+
+# 本地 MCP 配置（含 Switch 访问令牌）
+.mcp.json
