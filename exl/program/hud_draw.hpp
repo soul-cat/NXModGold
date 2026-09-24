@@ -8,6 +8,7 @@
 #pragma once
 
 #include "hud_model.hpp"
+#include "toggles_model.hpp"
 #include "unity_api.hpp"
 
 #include <algorithm>
@@ -40,6 +41,10 @@ constexpr char16_t HEALTH_SEPARATOR = u'/';
 constexpr bool SHOW_DEBUG_MARKER = true;
 constexpr float DEBUG_MARKER_SIZE = 12.0f;
 constexpr float DEBUG_MARKER_MARGIN = 8.0f;
+
+// 开关提示：屏幕上方居中，参考分辨率像素
+constexpr float TOAST_FONT = 26.0f;
+constexpr float TOAST_TOP = 48.0f;
 
 /// 保存并在析构时还原本模块会改动的 IMGUI 全局状态
 class ImguiStateGuard {
@@ -216,11 +221,24 @@ inline void drawEnemies(const Frame& frame, HudModel& model) {
   }
 }
 
+inline void drawToast(const Frame& frame, const toggles::Toggles& toggles) {
+  if (!toggles.isToastVisible(frame.now)) return;
+  const float scale = uiScale(frame.width, frame.height);
+  const float fontSize = TOAST_FONT * scale;
+  const float boxWidth = frame.width;
+  const float boxHeight = fontSize * 2.0f;
+  ui::setStyleFontSize(frame.style, static_cast<int32_t>(std::max(1.0f, std::round(fontSize))));
+  ui::setGuiContentColor(COLOR_TEXT_WHITE);
+  ui::label({0.0f, TOAST_TOP * scale, boxWidth, boxHeight}, ui::asciiString(toggles.toastText()), frame.style);
+}
+
 /// OnGUI 入口：每个 IMGUI 事件都会调用，只在 Repaint 时画
-inline void drawHud(HudModel& model) {
+inline void drawHud(HudModel& model, const toggles::Toggles& toggles) {
   if (ui::currentEventType() != ui::EVENT_TYPE_REPAINT) return;
   ImguiStateGuard guard;
   const Frame frame = beginFrame(guard.style());
+  drawToast(frame, toggles);
+  if (!toggles.isHudEnabled) return;
   if (SHOW_DEBUG_MARKER) {
     ui::setGuiColor(COLOR_DAMAGE);
     ui::drawTexture({DEBUG_MARKER_MARGIN, DEBUG_MARKER_MARGIN, DEBUG_MARKER_SIZE, DEBUG_MARKER_SIZE}, frame.white);

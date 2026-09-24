@@ -140,6 +140,11 @@ inline void setStyleAlignment(ManagedObject style, int32_t anchor) {
 
 // ---------------------------------------------------------------- 字符串
 
+/// ASCII C 串 → 托管字符串（Marshal.PtrToStringAnsi）
+inline ManagedString asciiString(const char* text) {
+  return mainFunction<ManagedString (*)(const char*, const void*)>(MARSHAL_PTRTOSTRANSI)(text, nullptr);
+}
+
 inline ManagedString intToString(int32_t value) {
   return mainFunction<ManagedString (*)(const int32_t*, const void*)>(INT32_TOSTRING)(&value, nullptr);
 }

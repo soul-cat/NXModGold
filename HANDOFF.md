@@ -142,12 +142,18 @@ trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路�
 - **Ryujinx 必须关 Hypervisor**（`use_hypervisor: false`）：Unity GC 跨线程
   `svcGetThreadContext3` 在 Apple Hypervisor 上返回 BadArgument 直接崩（与 mod 无关）。
 - **main.npdm 必须基于游戏原版**：exlaunch 要 svcMapProcessMemory 等 4 个
-  零售游戏没有的 SVC。`40-patch-npdm.py` 只改 ACID/ACI0 的 KAC，其余原样；
+  零售游戏没有的 SVC。`40-patch-npdm.py` 只改 ACID/ACI0 的 KAC 与 fs 权限
+  （放开到 `0xffffffffffffffff` 供 SD 日志挂载；原版只有 Debug 位），其余原样；
   不要用 exlaunch 模板 json 生成（那是别的游戏的栈大小/服务表）。
 - Build ID 从 main 的 `.rodata` 里的 GNU build-id note 取（Atmosphère creport
   的做法），不依赖 SaltySD_GetBID。
-- 日志走 `svcOutputDebugString`：Ryujinx 里打开 Guest 日志可见；实机上没有
-  调试器时看不到，实机调试另需 SD 文件日志。
+- 日志同时走 `svcOutputDebugString`（Ryujinx Guest 日志）和 SD 卡文件
+  `SD:/config/sshud/log.txt`（Ryujinx 为 `datas/portable/sdcard/config/sshud/log.txt`，
+  已在 Ryujinx 验证；实机未验证）。游戏首个 `CameraController.LateUpdate` 之前的日志先缓冲，
+  之后逐行 flush，每次启动覆盖。挂载失败只在 svc 日志里报一行 `sd log disabled`。
+- 开关：按住 L + R 再按 ↑ 切血条 / ↓ 切地图标记（地图下次打开生效），屏幕上方提示 2 秒。
+  手柄经 `nn::hid::GetNpadState` 读 FullKey/JoyDual(No1) 与 Handheld，符号由游戏的 sdk 模块导出（已核对）。
+  开关状态不持久化，重启恢复全开。
 - GCC 16 会对 exlaunch 的 `hook_impl.cpp` 报 `-Wnon-c-typedef-for-linkage`
   （它开了 -Werror），`exl/config.mk` 已加 `-Wno-`。
 - 不自动部署到 Ryujinx 目录（不往仓库外写文件），`make` 结束时打印路径。

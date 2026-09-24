@@ -66,6 +66,7 @@ plugin/source/offsets.h
 exl/program/collectibles.gen.h
 tests/test_layout
 tests/test_hud_model
+tests/test_toggles
 
 # --- C# 工具产物 ---
 bin/

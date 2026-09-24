@@ -6,7 +6,7 @@
 //     删掉 InvMarker / InvMarkerCollide（否则标记菜单会把它当玩家标记处理）和第 0 个子节点，
 //     换成游戏自带图标（map_icons.hpp）；图标没找到时退回按分类染色的圆点。
 //   - 定位：GetMapZoneFromSceneName → GetSceneInfo → GetMapPosition（游戏放尸体标记同款）。
-//   - 显隐：全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
+//   - 显隐：组合键开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
 //
 // 托管对象全部"现取现用"，不跨帧持有托管指针（原生持有的引用 GC 看不见）：
 // 我们的标记在 markerParent 下是连续一段子节点，每次刷新 Find("sshud_pin_0")
@@ -18,6 +18,7 @@
 #include "map_collected.hpp"
 #include "map_icons.hpp"
 #include "map_markers_data.hpp"
+#include "toggles.hpp"
 
 #if __has_include("collectibles.gen.h")
 #include "collectibles.gen.h"
@@ -220,7 +221,7 @@ inline void refreshMarkers(ui::ManagedObject gameMap) {
   const bool wantsIcons = iconProgress().isPending();
   IconSet icons;  // 含托管指针，必须在栈上（GC 会扫栈）
   if (wantsIcons) loadPendingIcons(icons, gameMap, tpl);
-  const bool pinsEnabled = pinVisibilityState() != PIN_STATE_NONE;
+  const bool pinsEnabled = toggles::g_toggles.isMapEnabled && pinVisibilityState() != PIN_STATE_NONE;
   RefreshStats stats;
   static SceneCache s_scenes;  // 大对象不放栈上；每次刷新重置（场景对象游戏自己持有，不怕 GC）
   s_scenes = SceneCache{};

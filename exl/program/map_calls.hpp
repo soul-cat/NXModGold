@@ -22,7 +22,7 @@ R call(uintptr_t rva, A... args) {
   return ui::mainFunction<R (*)(A..., const void*)>(rva)(args..., nullptr);
 }
 
-inline ui::ManagedString managedString(const char* text) { return call<ui::ManagedString>(MARSHAL_PTRTOSTRANSI, text); }
+inline ui::ManagedString managedString(const char* text) { return ui::asciiString(text); }
 
 inline uint64_t arrayLength(const void* array) { return ui::readField<uint64_t>(array, IL2CPP_ARRAY_LENGTH); }
 inline ui::ManagedObject arrayItem(const void* array, uint64_t i) {
