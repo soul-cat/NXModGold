@@ -106,3 +106,46 @@ framebuffer 选 1280x256：双缓冲 1280 KB，对 nx-ovlloader 的 6 MB applet 
 给下一个接手者的文档：当前状态（哪些验证过、哪些没有）、
 唯一外部阻塞、六个会浪费时间的坑（每条带一手出处）、
 必须保持的不变量、有风险待实机验证的地方、建议推进顺序。
+
+---
+
+## 2026-09-24
+
+### chore: 迁到 M1 Pro 开发机
+
+devkitPro 原生 arm64（`devkitpro-pacman-installer.pkg` v6.0.2 内含 arm64 子包，
+工具链从 `osx/arm64` 仓库装，GCC 16.1）。`make -C overlay` 直接通过；
+`make -C plugin` 用桩 offsets.h 编译通过（重定位 410×RELATIVE + 6×GLOB_DAT +
+1×JUMP_SLOT，6 个 UND SaltySD 符号），产物已删。宿主机测试 `make -C tests test` 全绿。
+
+换机踩到两处 HANDOFF 未记录的步骤，已补进 HANDOFF：
+- `saltysd_ipc_sm.h` 是 Status-Monitor `SaltyNX.h` 的改名拷贝，此前只存在于旧机。
+- libsysbase 修补必须用 `aarch64-none-elf-ar`，macOS `ar` 读不出成员。
+
+### feat(exl): exlaunch 注入路线（模拟器可测）
+
+Ryujinx 不跑 Atmosphère sysmodule，SaltyNX 插件与 Tesla overlay 在模拟器里
+不存在。新增 `exl/`：subsdk9 + main.npdm 从 exefs 注入，Ryujinx 与实机通用。
+
+| 文件 | 说明 |
+|------|------|
+| `exl/program/main.cpp` | Build ID 校验（.rodata GNU note）+ TakeDamage trampoline hook，只打日志 |
+| `exl/Makefile` / `exl/config.mk` | vendor/exlaunch 同步到 build/sshud/ 后覆盖 program/，不改 vendor |
+| `tools/40-patch-npdm.py` | 游戏原版 main.npdm 的 ACID/ACI0 KAC 补 4 个 SVC，其余字节不动 |
+| `tools/05-unpack-container.sh` | 同时拷出 main.npdm，列出 exefs，自带 subsdk9 时告警 |
+
+**验证**
+
+```
+./tools/40-patch-npdm.py selftest   → 与 npdmtool 逐字节一致 / 幂等 / 子段后移 / ACI0 在前布局
+make -C exl（桩 offsets.h + 伪造 npdm）→ subsdk9 62 KB，deploy/ 组装成功，产物已删
+objdump TakeDamageHook::Callback      → x0/x1/x2 保存后原样尾调 Orig
+```
+
+**决策**
+- 不用 exlaunch 模板 json 生成 npdm：那是别的游戏的栈大小/服务表，改为在原版上最小补丁。
+- 本版不绘制，先在 Ryujinx 日志里确认 hook 触发与 hp/initHp 数值，再决定
+  绘制走游戏内（NVN/ImGui，d3hack 有先例）还是继续实机 Tesla。
+
+**未决**：模拟器下载源 `update.ryujinx.app` / `git.ryujinx.app`（91.239.78.255）
+2026-09-24 全球超时，待恢复。

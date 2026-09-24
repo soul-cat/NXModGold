@@ -107,6 +107,41 @@ make -C tests tsan     # ThreadSanitizer
 - **世界坐标跟随**（怪物头顶血条）。v1 是屏幕固定位置。
   协议里已经预留 `screenX/screenY` + `SSHUD_FLAG_POS_VALID`，**不需要改协议**。
 
+### exlaunch 版（`exl/`，2026-09-24 新增，为了能在模拟器上测）
+
+SaltyNX 与 Tesla 都是 Atmosphère 的 sysmodule，Ryujinx 不跑它们，所以
+`plugin/` + `overlay/` 在模拟器里完全不会出现。`exl/` 是第二条加载路线：
+编成 `subsdk9` + `main.npdm` 从 exefs 注入，由游戏自己的 rtld 加载，
+**Ryujinx 与 Atmosphère 用同一份产物**。hook 用 exlaunch 自带的
+trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路线上不存在）。
+
+| 项 | 状态 |
+|---|---|
+| `make -C exl` 编译 subsdk9（M1 Pro，GCC 16.1） | ✅（桩 offsets.h 验证，产物已删） |
+| hook 回调原样转发 x0/x1/x2 | ✅ 反汇编确认 |
+| `tools/40-patch-npdm.py` 补 SVC | ✅ 自检：与 npdmtool 逐字节一致、幂等、子段后移 |
+| 用游戏原版 npdm 组装 deploy/ | ❓ 需要 `work/dump/ExeFS/main.npdm`（05 脚本现在会拷） |
+| Ryujinx 里 hook 触发、日志里 hp/initHp 数值合理 | ❓ 待模拟器 |
+| 绘制 | 未做（本版只打日志） |
+
+要点：
+- **main.npdm 必须基于游戏原版**：exlaunch 要 svcMapProcessMemory 等 4 个
+  零售游戏没有的 SVC。`40-patch-npdm.py` 只改 ACID/ACI0 的 KAC，其余原样；
+  不要用 exlaunch 模板 json 生成（那是别的游戏的栈大小/服务表）。
+- Build ID 从 main 的 `.rodata` 里的 GNU build-id note 取（Atmosphère creport
+  的做法），不依赖 SaltySD_GetBID。
+- 日志走 `svcOutputDebugString`：Ryujinx 里打开 Guest 日志可见；实机上没有
+  调试器时看不到，实机调试另需 SD 文件日志。
+- GCC 16 会对 exlaunch 的 `hook_impl.cpp` 报 `-Wnon-c-typedef-for-linkage`
+  （它开了 -Werror），`exl/config.mk` 已加 `-Wno-`。
+- 不自动部署到 Ryujinx 目录（不往仓库外写文件），`make` 结束时打印路径。
+- 游戏若自带 subsdk9 会冲突，05 脚本会告警并列出 exefs 内容。
+
+**`plugin/` 的一个潜在问题**（`exl/` 已规避）：IL2CPP 的 TakeDamage 实际有
+第三个参数 x2 = `MethodInfo*`，`plugin/source/main.cpp` 的
+`TakeDamageFn` 只声明了两个参数，调用原函数时 x2 是 hook 体留下的任意值。
+非泛型方法一般不读它，所以未必出事，但若实机 hook 装上后打怪崩溃，先查这里。
+
 ---
 
 ## 卡在哪 / 实机调试进度（2026-09-24，等待下一轮实机验证）
@@ -151,6 +186,9 @@ hook 若装上则 TakeDamage 触发（`SSHUD_HOOK_TAKEDAMAGE` 位 → HUD 有数
    - `git clone https://github.com/shinyquagsire23/SaltyNX.git vendor/SaltyNX`
    - `git clone --depth 1 https://github.com/Perfare/Il2CppDumper.git vendor/Il2CppDumper`（20 脚本自动打 unity6 补丁）
    - `git clone --depth 1 --filter=blob:none --sparse https://github.com/masagrator/Status-Monitor-Overlay.git vendor/status-monitor && git -C vendor/status-monitor sparse-checkout set lib/libtesla include`
+     然后 `cp vendor/status-monitor/include/SaltyNX.h vendor/status-monitor/include/saltysd_ipc_sm.h`
+     （`overlay/source/main.cpp` 按这个名字 include；此前只存在于开发机上）
+   - `git clone --depth 1 https://github.com/shadowninja108/exlaunch.git vendor/exlaunch`（`exl/` 版用）
    - **vendor/nx-fps-libnx**（libnx_min 运行时，SaltyNX 插件必需）：
      从 `masagrator/NX-FPS` 仓库 `lib/libnx_min/nx/` 下载 `lib/` 与
      `include/`（递归）以及 `switch.ld`/`switch.specs`。其中
@@ -159,11 +197,13 @@ hook 若装上则 TakeDamage 触发（`SSHUD_HOOK_TAKEDAMAGE` 位 → HUD 有数
      ```sh
      cp $DEVKITA64/aarch64-none-elf/lib/libsysbase.a vendor/nx-fps-libnx/lib/
      cd vendor/nx-fps-libnx/lib
-     ar x libsysbase.a libsysbase_libsysbase_a-iosupport.o
+     aarch64-none-elf-ar x libsysbase.a libsysbase_libsysbase_a-iosupport.o
      aarch64-none-elf-objcopy --rename-section .rodata.dotab_stdnull=.data.dotab_stdnull \
        libsysbase_libsysbase_a-iosupport.o fix.o && mv fix.o libsysbase_libsysbase_a-iosupport.o
-     ar r libsysbase.a libsysbase_libsysbase_a-iosupport.o
+     aarch64-none-elf-ar r libsysbase.a libsysbase_libsysbase_a-iosupport.o
      ```
+     必须用 devkitPro 的 `aarch64-none-elf-ar`：macOS 自带的 `ar` 读不出这个
+     GNU 格式归档的成员（报 "not found in archive"）。
 4. 实机：Switch 1 + Atmosphère + SaltyNX 1.9.3 + nx-ovlloader/Tesla-Menu；
    主机上必须装 v1.0.3 更新档（Build ID 匹配）。**勿联网（封号）**。
 
