@@ -8,7 +8,7 @@
 //     删掉 InvMarker / InvMarkerCollide（否则标记菜单会把它当玩家标记处理）和第 0 个子节点，
 //     换成游戏自带图标（map_icons.hpp）；图标没找到时退回按分类染色的圆点。
 //   - 定位：GetMapZoneFromSceneName → GetSceneInfo → GetMapPosition（游戏放尸体标记同款）。
-//   - 显隐：组合键开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
+//   - 显隐：地图标记开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
 //   - 刷新前先调 GameManager.SaveLevelState：游戏平时只在离开房间时把房间内物品状态写进 SceneData，
 //     不调的话在同一房间捡完东西马上开图，图标还在。
 //
@@ -246,7 +246,8 @@ inline void refreshMarkers(ui::ManagedObject gameMap) {
   const bool wantsIcons = iconProgress().isPending();
   IconSet icons;  // 含托管指针，必须在栈上（GC 会扫栈）
   if (wantsIcons) loadPendingIcons(icons, gameMap, tpl);
-  const bool pinsEnabled = toggles::g_toggles.isMapEnabled && pinVisibilityState() != PIN_STATE_NONE;
+  const bool pinsEnabled =
+      toggles::g_settings.isEnabled(toggles::Feature::MapMarkers) && pinVisibilityState() != PIN_STATE_NONE;
   RefreshStats stats;
   static SceneCache s_scenes;  // 大对象不放栈上；每次刷新重置（场景对象游戏自己持有，不怕 GC）
   s_scenes = SceneCache{};

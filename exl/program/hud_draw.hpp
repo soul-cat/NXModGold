@@ -1,4 +1,5 @@
-// 每帧在 PlayMakerGUI.OnGUI 里用 IMGUI 画 HUD：BOSS 条、普通敌人血条、伤害飘字。
+// 每帧在 PlayMakerGUI.OnGUI 里用 IMGUI 画 HUD：BOSS 条、普通敌人血条、伤害飘字（各自受开关控制），
+// 以及按住 R3 时的开关面板。
 //
 // 外观对齐 PC 版 Silksong_HealthBar 的默认值（docs/tasks/hud-draw.md）。
 // 只在 Repaint 事件里画（DrawTexture/Label 在其它事件里不出像素）。
@@ -27,6 +28,7 @@ constexpr ui::Color COLOR_TEXT_DARK{0x0E / 255.0f, 0x04 / 255.0f, 0x04 / 255.0f,
 constexpr ui::Color COLOR_TEXT_WHITE{1.0f, 1.0f, 1.0f, 1.0f};
 constexpr ui::Color COLOR_BOSS_FRAME{1.0f, 1.0f, 1.0f, 0.95f};
 constexpr ui::Color COLOR_DAMAGE{0xDC / 255.0f, 0x14 / 255.0f, 0x3C / 255.0f, 1.0f};
+constexpr ui::Color COLOR_MENU_BG{0.0f, 0.0f, 0.0f, 0.7f};
 
 // ---------------------------------------------------------------- 字号（参考分辨率像素 / 世界单位）
 constexpr float BOSS_NAME_FONT = 28.0f;
@@ -42,9 +44,12 @@ constexpr float TEXT_BOX_WIDTH_FACTOR = 6.0f;  // 文字框宽度 = 字号 × �
 
 constexpr char16_t HEALTH_SEPARATOR = u'/';
 
-// 开关提示：屏幕上方居中，参考分辨率像素
-constexpr float TOAST_FONT = 26.0f;
-constexpr float TOAST_TOP = 48.0f;
+// 开关面板（按住 R3）：屏幕上方居中，参考分辨率像素
+constexpr float MENU_FONT = 26.0f;
+constexpr float MENU_TOP = 48.0f;
+constexpr float MENU_LINE_HEIGHT = 38.0f;
+constexpr float MENU_PADDING = 14.0f;
+constexpr float MENU_BOX_WIDTH = 480.0f;  // 足够放下最长一行 "Down  Damage numbers: OFF"
 
 /// 保存并在析构时还原本模块会改动的 IMGUI 全局状态
 class ImguiStateGuard {
@@ -225,7 +230,10 @@ inline Frame beginFrame(ui::ManagedObject style) {
   return frame;
 }
 
-inline void drawEnemies(const Frame& frame, HudModel& model) {
+/// 读活血量并清理失效条目（开关全关也要跑）；按开关决定画不画 BOSS 条 / 小怪血条
+inline void drawEnemies(const Frame& frame, HudModel& model, const toggles::Settings& settings) {
+  const bool isBossBarEnabled = settings.isEnabled(toggles::Feature::BossBar);
+  const bool isEnemyBarEnabled = settings.isEnabled(toggles::Feature::EnemyBars) && frame.camera != nullptr;
   int bossIndex = 0;
   for (int i = 0; i < MAX_ENEMIES; ++i) {
     Enemy& enemy = model.enemies()[i];
@@ -236,37 +244,50 @@ inline void drawEnemies(const Frame& frame, HudModel& model) {
       continue;
     }
     if (isBoss(enemy.maxHp)) {
-      drawBoss(frame, enemy, hp, bossIndex++);
-    } else if (frame.camera != nullptr) {
+      if (isBossBarEnabled) drawBoss(frame, enemy, hp, bossIndex++);
+    } else if (isEnemyBarEnabled) {
       drawEnemy(frame, enemy, hp);
     }
   }
 }
 
-inline void drawToast(const Frame& frame, const toggles::Toggles& toggles) {
-  if (!toggles.isToastVisible(frame.now)) return;
+/// 开关面板：半透明底框 + 标题 + 每个功能一行 ON/OFF
+inline void drawMenu(const Frame& frame, const toggles::Settings& settings, bool isMenuOpen) {
+  if (!isMenuOpen) return;
   const float scale = uiScale(frame.width, frame.height);
-  const float fontSize = TOAST_FONT * scale;
-  const float boxWidth = frame.width;
-  const float boxHeight = fontSize * 2.0f;
-  ui::setStyleFontSize(frame.style, static_cast<int32_t>(std::max(1.0f, std::round(fontSize))));
+  const float lineHeight = MENU_LINE_HEIGHT * scale;
+  const float boxWidth = MENU_BOX_WIDTH * scale;
+  const float boxX = (frame.width - boxWidth) * 0.5f;
+  const float textTop = (MENU_TOP + MENU_PADDING) * scale;
+  const float lineCount = static_cast<float>(toggles::FEATURE_COUNT + 1);  // 标题 + 每个功能一行
+  ui::setGuiColor(COLOR_MENU_BG);
+  ui::drawTexture({boxX, MENU_TOP * scale, boxWidth, lineHeight * lineCount + 2.0f * MENU_PADDING * scale},
+                  frame.white);
+  ui::setGuiColor(COLOR_TEXT_WHITE);
+  ui::setStyleFontSize(frame.style, static_cast<int32_t>(std::max(1.0f, std::round(MENU_FONT * scale))));
   ui::setGuiContentColor(COLOR_TEXT_WHITE);
-  ui::label({0.0f, TOAST_TOP * scale, boxWidth, boxHeight}, ui::asciiString(toggles.toastText()), frame.style);
+  ui::label({boxX, textTop, boxWidth, lineHeight}, ui::asciiString(toggles::MENU_TITLE), frame.style);
+  char line[toggles::MENU_LINE_CAPACITY];
+  for (size_t i = 0; i < toggles::FEATURE_COUNT; ++i) {
+    toggles::formatMenuLine(static_cast<toggles::Feature>(i), settings, line, sizeof(line));
+    const float lineTop = textTop + lineHeight * static_cast<float>(i + 1);
+    ui::label({boxX, lineTop, boxWidth, lineHeight}, ui::asciiString(line), frame.style);
+  }
 }
 
 /// OnGUI 入口：每个 IMGUI 事件都会调用，只在 Repaint 时画
-inline void drawHud(HudModel& model, const toggles::Toggles& toggles) {
+inline void drawHud(HudModel& model, const toggles::Settings& settings, bool isMenuOpen) {
   if (ui::currentEventType() != ui::EVENT_TYPE_REPAINT) return;
   ImguiStateGuard guard;
   const Frame frame = beginFrame(guard.style());
-  drawToast(frame, toggles);
-  if (!toggles.isHudEnabled) return;
   model.expire(frame.now);
-  drawEnemies(frame, model);
-  if (frame.camera == nullptr) return;
-  for (int i = 0; i < MAX_POPUPS; ++i) {
-    if (model.popups()[i].active) drawPopup(frame, model.popups()[i]);
+  drawEnemies(frame, model, settings);
+  if (frame.camera != nullptr && settings.isEnabled(toggles::Feature::DamageNumbers)) {
+    for (int i = 0; i < MAX_POPUPS; ++i) {
+      if (model.popups()[i].active) drawPopup(frame, model.popups()[i]);
+    }
   }
+  drawMenu(frame, settings, isMenuOpen);  // 最后画，压在最上层
 }
 
 }  // namespace sshud::hud

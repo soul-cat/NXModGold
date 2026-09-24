@@ -1,4 +1,5 @@
-// 组合键开关的运行时部分：每帧读手柄（nn::hid，游戏的 sdk 模块导出），喂给 ComboDetector。
+// 开关面板的运行时部分：每帧读手柄（nn::hid，游戏的 sdk 模块导出），喂给 MenuInput。
+// 首次调用时从 SD 读开关（toggles_config）；松开 R3 时若有改动就写回 SD。
 //
 // 读三种握法再按位或：Pro 手柄 / 模拟器键盘（FullKey, No1）、双 Joy-Con（JoyDual, No1）、
 // 掌机（Handheld）。没连上的握法读出来全 0，不影响结果。只读状态，不会吞掉游戏的输入。
@@ -6,6 +7,7 @@
 #pragma once
 
 #include "lib.hpp"
+#include "toggles_config.hpp"
 #include "toggles_model.hpp"
 
 #include <cstring>
@@ -29,7 +31,9 @@ constexpr unsigned int NPAD_ID_HANDHELD = 0x20;
 constexpr size_t NPAD_STATE_BUFFER_SIZE = 0x80;  // NpadXxxState 实际 0x28，留余量防 SDK 加字段
 constexpr size_t NPAD_BUTTONS_OFFSET = 0x8;      // int64 samplingNumber 之后是 NpadButtonSet
 
-inline Toggles g_toggles;
+inline Settings g_settings;
+inline bool g_isMenuOpen = false;  // 本帧 R3 按住中：画开关面板
+inline bool g_isDirty = false;     // 面板打开期间改过开关，松开 R3 时写回 SD
 
 template <typename State>
 uint64_t buttonsOf(unsigned int id) {
@@ -45,13 +49,29 @@ inline uint64_t currentButtons() {
          buttonsOf<nn::hid::NpadHandheldState>(NPAD_ID_HANDHELD);
 }
 
-/// 每帧调用一次（CameraController.LateUpdate）
-inline void pollInput(float now) {
-  static ComboDetector s_detector;
-  const Feature feature = s_detector.update(currentButtons());
-  if (feature == Feature::None) return;
-  g_toggles.flip(feature, now);
-  Logging.Log("[sshud] toggle: hud=%d map=%d", g_toggles.isHudEnabled ? 1 : 0, g_toggles.isMapEnabled ? 1 : 0);
+/// 首次调用时从 SD 读开关（调用方保证 SD 已挂载）
+inline void loadOnce() {
+  static bool s_isLoaded = false;
+  if (s_isLoaded) return;
+  s_isLoaded = true;
+  loadSettings(g_settings);
+}
+
+/// 每帧调用一次（CameraController.LateUpdate，须在 sdlog::start() 之后）
+inline void pollInput() {
+  static MenuInput s_input;
+  loadOnce();
+  const MenuEvent event = s_input.update(currentButtons());
+  g_isMenuOpen = event.isOpen;
+  if (event.flipped != Feature::None) {
+    g_settings.flip(event.flipped);
+    g_isDirty = true;
+    Logging.Log("[sshud] toggle %s=%d", infoOf(event.flipped).key, g_settings.isEnabled(event.flipped) ? 1 : 0);
+  }
+  if (event.isClosed && g_isDirty) {
+    saveSettings(g_settings);
+    g_isDirty = false;
+  }
 }
 
 }  // namespace sshud::toggles

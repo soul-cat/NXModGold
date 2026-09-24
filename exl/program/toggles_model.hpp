@@ -1,65 +1,151 @@
-// 组合键开关的纯逻辑（不依赖 Unity / nn，tests/test_toggles.cpp 覆盖）。
+// 游戏内功能开关的纯逻辑（不依赖 Unity / nn，tests/test_toggles.cpp 覆盖）。
 //
-// 按住 L + R，再按 ↑ 切血条（含伤害数字、BOSS 条），再按 ↓ 切地图收集物标记。
-// 地图标记在下次打开地图时生效（标记只在 GameMap.SetupMapMarkers 时刷新）。
+// 按住 R3（右摇杆按下）弹出开关面板，按住期间按方向键切换对应功能：
+//   ↑ 小怪血条   → BOSS 血条   ↓ 伤害数字   ← 地图收集物标记
+// 松开 R3 面板消失；有改动就写回 SD:/config/sshud/config.ini（每行 key=0/1）。
+// 地图标记在下次打开地图时生效（标记只在打开地图时刷新）。
 
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace sshud::toggles {
 
 // nn::hid::NpadButton 的位
-constexpr uint64_t BUTTON_L = 1ull << 6;
-constexpr uint64_t BUTTON_R = 1ull << 7;
+constexpr uint64_t BUTTON_STICK_R = 1ull << 5;
+constexpr uint64_t BUTTON_LEFT = 1ull << 12;
 constexpr uint64_t BUTTON_UP = 1ull << 13;
+constexpr uint64_t BUTTON_RIGHT = 1ull << 14;
 constexpr uint64_t BUTTON_DOWN = 1ull << 15;
 
-constexpr uint64_t COMBO_HOLD = BUTTON_L | BUTTON_R;
-constexpr uint64_t COMBO_HUD = BUTTON_UP;
-constexpr uint64_t COMBO_MAP = BUTTON_DOWN;
+constexpr uint64_t MENU_HOLD = BUTTON_STICK_R;
 
-constexpr float TOAST_SECONDS = 2.0f;
+enum class Feature : uint8_t { EnemyBars, BossBar, DamageNumbers, MapMarkers, Count, None = Count };
+constexpr size_t FEATURE_COUNT = static_cast<size_t>(Feature::Count);
 
-enum class Feature : uint8_t { None, Hud, Map };
+struct FeatureInfo {
+  uint64_t button;
+  const char* buttonName;
+  const char* label;  // 面板文字用英文：IMGUI 默认字体不保证有中文字形
+  const char* key;    // config.ini 里的键名
+};
 
-/// 每帧喂一次当前按键；返回本帧触发的开关（只认按下沿，按住不重复触发）
-class ComboDetector {
+constexpr FeatureInfo FEATURES[FEATURE_COUNT] = {
+    {BUTTON_UP, "Up", "Enemy HP bars", "enemy_bars"},
+    {BUTTON_RIGHT, "Right", "Boss bar", "boss_bar"},
+    {BUTTON_DOWN, "Down", "Damage numbers", "damage_numbers"},
+    {BUTTON_LEFT, "Left", "Map markers", "map_markers"},
+};
+
+constexpr const char* MENU_TITLE = "SSHUD  (hold R3 + D-pad)";
+constexpr const char* CONFIG_HEADER = "# sshud feature toggles: 1 = on, 0 = off (in game: hold R3 + D-pad)\n";
+constexpr size_t CONFIG_TEXT_CAPACITY = 512;
+constexpr size_t MENU_LINE_CAPACITY = 64;
+
+inline const FeatureInfo& infoOf(Feature feature) { return FEATURES[static_cast<size_t>(feature)]; }
+
+struct Settings {
+  bool enabled[FEATURE_COUNT] = {true, true, true, true};
+
+  bool isEnabled(Feature feature) const { return enabled[static_cast<size_t>(feature)]; }
+  void flip(Feature feature) {
+    if (feature != Feature::None) enabled[static_cast<size_t>(feature)] = !isEnabled(feature);
+  }
+};
+
+/// 每帧一次的面板输入结果
+struct MenuEvent {
+  bool isOpen = false;             // 本帧 R3 按住中（画面板）
+  Feature flipped = Feature::None;  // 本帧切换的功能（只认按下沿）
+  bool isClosed = false;           // 本帧刚松开 R3
+};
+
+class MenuInput {
  public:
-  Feature update(uint64_t buttons) {
+  MenuEvent update(uint64_t buttons) {
     const uint64_t pressed = buttons & ~previous_;
+    const bool wasOpen = (previous_ & MENU_HOLD) != 0;
     previous_ = buttons;
-    if ((buttons & COMBO_HOLD) != COMBO_HOLD) return Feature::None;
-    if ((pressed & COMBO_HUD) != 0) return Feature::Hud;
-    if ((pressed & COMBO_MAP) != 0) return Feature::Map;
-    return Feature::None;
+    MenuEvent event;
+    event.isOpen = (buttons & MENU_HOLD) != 0;
+    event.isClosed = wasOpen && !event.isOpen;
+    if (!event.isOpen) return event;
+    for (size_t i = 0; i < FEATURE_COUNT; ++i) {
+      if ((pressed & FEATURES[i].button) != 0) {
+        event.flipped = static_cast<Feature>(i);
+        break;
+      }
+    }
+    return event;
   }
 
  private:
   uint64_t previous_ = 0;
 };
 
-struct Toggles {
-  bool isHudEnabled = true;
-  bool isMapEnabled = true;
-  Feature lastChanged = Feature::None;
-  float toastUntil = 0.0f;
+/// 面板一行，如 "Up  Enemy HP bars: ON"；返回写入的长度
+inline size_t formatMenuLine(Feature feature, const Settings& settings, char* out, size_t capacity) {
+  const FeatureInfo& info = infoOf(feature);
+  const int written = std::snprintf(out, capacity, "%s  %s: %s", info.buttonName, info.label,
+                                    settings.isEnabled(feature) ? "ON" : "OFF");
+  if (written < 0 || capacity == 0) return 0;
+  return std::min(static_cast<size_t>(written), capacity - 1);
+}
 
-  void flip(Feature feature, float now) {
-    if (feature == Feature::None) return;
-    bool& flag = feature == Feature::Hud ? isHudEnabled : isMapEnabled;
-    flag = !flag;
-    lastChanged = feature;
-    toastUntil = now + TOAST_SECONDS;
+/// 序列化成 config.ini 文本；返回写入的长度
+inline size_t formatSettings(const Settings& settings, char* out, size_t capacity) {
+  size_t length = 0;
+  auto append = [&](const char* text) {
+    const int written = std::snprintf(out + length, capacity - length, "%s", text);
+    if (written > 0) length += std::min(static_cast<size_t>(written), capacity - length - 1);
+  };
+  append(CONFIG_HEADER);
+  for (size_t i = 0; i < FEATURE_COUNT; ++i) {
+    char line[MENU_LINE_CAPACITY];
+    std::snprintf(line, sizeof(line), "%s=%d\n", FEATURES[i].key, settings.enabled[i] ? 1 : 0);
+    append(line);
   }
+  return length;
+}
 
-  bool isToastVisible(float now) const { return lastChanged != Feature::None && now < toastUntil; }
+namespace detail {
 
-  /// 提示文字用英文：IMGUI 默认字体不保证有中文字形
-  const char* toastText() const {
-    if (lastChanged == Feature::Hud) return isHudEnabled ? "HP bars: ON" : "HP bars: OFF";
-    return isMapEnabled ? "Map markers: ON (reopen map)" : "Map markers: OFF (reopen map)";
+inline bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\r'; }
+
+/// 解析一行 "key = value"；不认识的键、注释、坏值都忽略
+inline void parseLine(const char* begin, const char* end, Settings& settings) {
+  while (begin < end && isSpace(*begin)) ++begin;
+  const char* equals = static_cast<const char*>(std::memchr(begin, '=', static_cast<size_t>(end - begin)));
+  if (equals == nullptr || *begin == '#') return;
+  const char* keyEnd = equals;
+  while (keyEnd > begin && isSpace(keyEnd[-1])) --keyEnd;
+  const char* value = equals + 1;
+  while (value < end && isSpace(*value)) ++value;
+  if (value == end || (*value != '0' && *value != '1')) return;
+  const size_t keyLength = static_cast<size_t>(keyEnd - begin);
+  for (size_t i = 0; i < FEATURE_COUNT; ++i) {
+    if (std::strlen(FEATURES[i].key) == keyLength && std::memcmp(FEATURES[i].key, begin, keyLength) == 0) {
+      settings.enabled[i] = *value == '1';
+    }
   }
-};
+}
+
+}  // namespace detail
+
+/// 从 config.ini 文本读开关；文件里没写的功能保持 settings 原值
+inline void parseSettings(const char* text, size_t length, Settings& settings) {
+  const char* cursor = text;
+  const char* end = text + length;
+  while (cursor < end) {
+    const char* newline = static_cast<const char*>(std::memchr(cursor, '\n', static_cast<size_t>(end - cursor)));
+    const char* lineEnd = newline != nullptr ? newline : end;
+    detail::parseLine(cursor, lineEnd, settings);
+    cursor = lineEnd + 1;
+  }
+}
 
 }  // namespace sshud::toggles
