@@ -20,7 +20,7 @@ constexpr float POPUP_START_OFFSET_UNITS = 1.0f;
 constexpr float REFERENCE_WIDTH = 1920.0f;   // CanvasScaler 参考分辨率
 constexpr float REFERENCE_HEIGHT = 1080.0f;
 constexpr float BOSS_BAR_WIDTH = 900.0f;
-constexpr float BOSS_BAR_HEIGHT = 25.0f;
+constexpr float BOSS_BAR_HEIGHT = 36.0f;  // 贴图外框高度（PC 纯色条是 25，贴图带描边尖角需要更高）
 constexpr float BOSS_BAR_EDGE_MARGIN = 42.0f;  // 距屏幕底边
 constexpr float BOSS_BAR_STACK_GAP = 54.0f;    // 多个 BOSS 纵向间距 = 高 + 54
 constexpr float BAR_FILL_INSET = 2.0f;

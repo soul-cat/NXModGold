@@ -685,6 +685,53 @@
       "method": "SaveLevelState",
       "required": true,
       "_note": "触发 SavePersistentObjects：房间内物品把状态写进 SceneData（离开房间时游戏做的同一件事）"
+    },
+    {
+      "name": "TEX2D_CTOR",
+      "class": "Texture2D",
+      "namespace": "UnityEngine",
+      "method": "ctor",
+      "signature_contains": "int width, int height, TextureFormat textureFormat, bool mipChain)",
+      "required": true
+    },
+    {
+      "name": "TEX2D_LOADRAWDATA",
+      "class": "Texture2D",
+      "namespace": "UnityEngine",
+      "method": "LoadRawTextureData",
+      "signature_contains": "LoadRawTextureData(IntPtr data, int size)",
+      "required": true
+    },
+    {
+      "name": "TEX2D_APPLY",
+      "class": "Texture2D",
+      "namespace": "UnityEngine",
+      "method": "Apply",
+      "signature_contains": "void Apply()",
+      "required": true
+    },
+    {
+      "name": "TEX_SETWRAPMODE",
+      "class": "Texture",
+      "namespace": "UnityEngine",
+      "method": "set_wrapMode",
+      "required": true
+    },
+    {
+      "name": "UOBJ_SETHIDEFLAGS",
+      "class": "Object",
+      "namespace": "UnityEngine",
+      "method": "set_hideFlags",
+      "required": true
+    },
+    {
+      "name": "GCHANDLE_ALLOC",
+      "class": "GCHandle",
+      "namespace": "System.Runtime.InteropServices",
+      "method": "Alloc",
+      "signature_contains": "Alloc(object value)",
+      "required": true,
+      "_note": "把运行时创建的贴图钉住，免得托管包装被 GC 回收"
     }
   ],
   "script": [
@@ -722,6 +769,17 @@
       "kind": "type_slot",
       "script_name": "HealthManager_TypeInfo",
       "_note": "槽 → Il2CppClass*；+0xB8 static_fields（HealthManager.OnEnable 反汇编核实）"
+    },
+    {
+      "name": "TEX2D_TYPEINFO",
+      "kind": "type_slot",
+      "script_name": "UnityEngine.Texture2D_TypeInfo"
+    },
+    {
+      "name": "IL2CPP_OBJECT_NEW",
+      "kind": "first_bl_in",
+      "script_name": "UnityEngine.Events.UnityEvent<Color>$$GetDelegate",
+      "_note": "il2cpp_codegen_object_new：该方法第一条 BL 就是 new（HealthManager.OnEnable 里 ldr TypeInfo; bl 同一地址 核实）"
     }
   ]
 }

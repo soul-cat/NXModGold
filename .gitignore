@@ -79,3 +79,4 @@ __pycache__/
 
 # 本地 MCP 配置（含 Switch 访问令牌）
 .mcp.json
+exl/program/bar_textures.gen.h

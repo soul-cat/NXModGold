@@ -98,11 +98,11 @@ static void testBossThreshold() {
 static void testBossBarLayout() {
   std::printf("test: BOSS 条底部居中、向上堆叠、在屏内\n");
   const Rect r0 = bossBarRect(0, 1920, 1080);
-  CHECK(near(r0.width, 900) && near(r0.height, 25));
+  CHECK(near(r0.width, 900) && near(r0.height, BOSS_BAR_HEIGHT));
   CHECK(near(r0.x, 510));
   CHECK(near(r0.y + r0.height, 1080 - 42));
   const Rect r1 = bossBarRect(1, 1920, 1080);
-  CHECK(near(r0.y - r1.y, 25 + 54));
+  CHECK(near(r0.y - r1.y, BOSS_BAR_HEIGHT + 54));
   const Rect small = bossBarRect(0, 1280, 720);
   CHECK(near(small.width, 600));
   CHECK(small.x >= 0 && small.x + small.width <= 1280 && small.y + small.height <= 720);

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "bar_textures.hpp"
 #include "hud_model.hpp"
 #include "toggles_model.hpp"
 #include "unity_api.hpp"
@@ -24,6 +25,7 @@ constexpr ui::Color COLOR_ENEMY_BG{0.0f, 0.0f, 0.0f, 0x85 / 255.0f};
 constexpr ui::Color COLOR_BOSS_BG{0.0f, 0.0f, 0.0f, 0x80 / 255.0f};
 constexpr ui::Color COLOR_TEXT_DARK{0x0E / 255.0f, 0x04 / 255.0f, 0x04 / 255.0f, 1.0f};
 constexpr ui::Color COLOR_TEXT_WHITE{1.0f, 1.0f, 1.0f, 1.0f};
+constexpr ui::Color COLOR_BOSS_FRAME{1.0f, 1.0f, 1.0f, 0.95f};
 constexpr ui::Color COLOR_DAMAGE{0xDC / 255.0f, 0x14 / 255.0f, 0x3C / 255.0f, 1.0f};
 
 // ---------------------------------------------------------------- 字号（参考分辨率像素 / 世界单位）
@@ -33,6 +35,9 @@ constexpr float BOSS_NAME_GAP = 28.0f;
 constexpr float ENEMY_NUMBERS_FONT_UNITS = 0.32f;
 constexpr float ENEMY_NUMBERS_GAP_UNITS = 0.3f;
 constexpr float DAMAGE_FONT_UNITS = 0.55f;
+// BOSS 贴图条：填充条在外框里的内缩量（相对外框高度；按 boss_frame.png 60px 高时 左右 10 / 上下 16 量得）
+constexpr float BOSS_FILL_INSET_X_RATIO = 10.0f / 60.0f;
+constexpr float BOSS_FILL_INSET_Y_RATIO = 16.0f / 60.0f;
 constexpr float TEXT_BOX_WIDTH_FACTOR = 6.0f;  // 文字框宽度 = 字号 × 此值，足够放下 "9999/9999"
 
 constexpr char16_t HEALTH_SEPARATOR = u'/';
@@ -125,15 +130,32 @@ inline ui::ManagedString bossName(const void* manager) {
   return record != nullptr ? ui::localisedToString(record + EJR_DISPLAYNAME) : nullptr;
 }
 
+/// 外框 → 暗色空槽 → 按比例的填充（填充右端尖角跟着血量走）
+inline void drawTexturedBossBar(const Rect& bar, float ratio, const BossBarTextures& textures) {
+  drawSliced(textures.frame, bar, COLOR_BOSS_FRAME);
+  const float insetX = bar.height * BOSS_FILL_INSET_X_RATIO;
+  const float insetY = bar.height * BOSS_FILL_INSET_Y_RATIO;
+  const Rect track{bar.x + insetX, bar.y + insetY, bar.width - 2.0f * insetX, bar.height - 2.0f * insetY};
+  drawSliced(textures.fill, track, COLOR_BOSS_BG);
+  drawSliced(textures.fill, {track.x, track.y, track.width * ratio, track.height}, COLOR_BAR_FILL);
+  ui::setGuiColor(COLOR_TEXT_WHITE);
+}
+
 inline void drawBoss(const Frame& frame, const Enemy& enemy, int32_t hp, int index) {
   const Rect bar = bossBarRect(index, frame.width, frame.height);
   const float scale = uiScale(frame.width, frame.height);
   const float centerX = bar.x + bar.width * 0.5f;
-  drawBar(frame, bar, healthRatio(hp, enemy.maxHp), COLOR_BOSS_BG);
-  drawText(frame, centerX, bar.y + bar.height * 0.5f, BOSS_NUMBERS_FONT * scale,
-           healthText(hp, enemy.maxHp), COLOR_TEXT_DARK);
-  drawText(frame, centerX, bar.y - BOSS_NAME_GAP * scale, BOSS_NAME_FONT * scale,
-           bossName(enemy.manager), COLOR_TEXT_DARK);
+  const float ratio = healthRatio(hp, enemy.maxHp);
+  if (const BossBarTextures* textures = bossBarTextures()) {
+    drawTexturedBossBar(bar, ratio, *textures);
+  } else {
+    drawBar(frame, bar, ratio, COLOR_BOSS_BG);  // 贴图建不出来时退回纯色条
+  }
+  const ui::Color numbersColor = ratio < LOW_HEALTH_RATIO ? COLOR_TEXT_WHITE : COLOR_TEXT_DARK;
+  drawText(frame, centerX, bar.y + bar.height * 0.5f, BOSS_NUMBERS_FONT * scale, healthText(hp, enemy.maxHp),
+           numbersColor);
+  drawText(frame, centerX, bar.y - BOSS_NAME_GAP * scale, BOSS_NAME_FONT * scale, bossName(enemy.manager),
+           COLOR_TEXT_WHITE);
 }
 
 /// 世界坐标 → IMGUI 坐标（原点左上）；在相机背后返回 false

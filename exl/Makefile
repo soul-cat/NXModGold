@@ -24,7 +24,7 @@ DEPLOY    := $(CURDIR)/deploy/exefs
 
 export PATH := $(DEVKITPRO)/tools/bin:$(DEVKITPRO)/devkitA64/bin:$(PATH)
 
-.PHONY: all subsdk stage check clean
+.PHONY: all subsdk stage check clean textures
 
 all: subsdk
 	@test -f $(GAME_NPDM) || { \
@@ -45,6 +45,12 @@ all: subsdk
 subsdk: check stage
 	@$(MAKE) --no-print-directory -C $(STAGE) REPO_ROOT=$(REPO_ROOT)
 
+# BOSS 条贴图（assets/*.png → program/bar_textures.gen.h，生成物不入库）
+TEXTURES_HEADER := $(CURDIR)/program/bar_textures.gen.h
+textures: $(TEXTURES_HEADER)
+$(TEXTURES_HEADER): $(wildcard $(CURDIR)/assets/*.png) $(REPO_ROOT)/tools/60-gen-bar-textures.py
+	@$(REPO_ROOT)/tools/60-gen-bar-textures.py
+
 check:
 	@test -d $(EXLAUNCH)/source/lib || { \
 	  echo "缺 $(EXLAUNCH)：git clone --depth 1 https://github.com/shadowninja108/exlaunch.git vendor/exlaunch"; \
@@ -54,7 +60,7 @@ check:
 	  exit 1; }
 
 # 只同步 vendor；build/ 与 deploy/ 被排除，因而保留增量编译的中间产物
-stage:
+stage: textures
 	@mkdir -p $(STAGE)
 	@rsync -a --delete --exclude .git --exclude /source/program --exclude /build --exclude /deploy \
 	  $(EXLAUNCH)/ $(STAGE)/
