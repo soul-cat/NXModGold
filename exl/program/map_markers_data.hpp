@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace sshud::map {
@@ -27,6 +28,15 @@ enum class CollectibleKind : uint8_t {
   SilkHeart,       // 丝之心
   Ability,         // 能力
   Flea,            // 跳蚤
+};
+
+constexpr size_t COLLECTIBLE_KIND_COUNT = static_cast<size_t>(CollectibleKind::Flea) + 1;
+
+/// 日志用的分类名（与上面同序）
+constexpr const char* COLLECTIBLE_KIND_NAMES[COLLECTIBLE_KIND_COUNT] = {
+    "MaskShard", "SpoolFragment", "Craftmetal", "Tool",    "ToolkitUpgrade", "Materium",
+    "Relic",     "Memento",       "MemoryLocket", "Collectable", "Rosary", "ShellShard",
+    "MossBerry", "SilkEater",     "Crest",      "SilkHeart", "Ability",   "Flea",
 };
 
 /// "已收集"的判定方式

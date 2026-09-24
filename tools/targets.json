@@ -642,6 +642,14 @@
       "class": "CollectableItem",
       "method": "GetCollectionIcon",
       "required": true
+    },
+    {
+      "name": "GO_GETACTIVEINHIERARCHY",
+      "class": "GameObject",
+      "namespace": "UnityEngine",
+      "method": "get_activeInHierarchy",
+      "required": true,
+      "_note": "没买区域地图时，游戏不激活该区域的地图块"
     }
   ],
   "script": [

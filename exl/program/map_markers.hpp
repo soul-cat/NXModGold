@@ -49,7 +49,8 @@ struct SceneInfo {
   ui::ManagedObject scene = nullptr;     // GameMapScene
   ui::ManagedObject sceneObj = nullptr;  // GameObject
   Vector2 scenePos{};
-  bool isMapped = false;
+  bool isMapped = false;  // 游戏记为已绘制（scenesMapped）
+  bool isDrawn = false;   // 地图块在层级里激活：没买区域地图时游戏不激活，已绘制的房间也不画
 };
 
 inline SceneInfo querySceneInfo(ui::ManagedObject gameMap, const char* sceneName) {
@@ -59,6 +60,7 @@ inline SceneInfo querySceneInfo(ui::ManagedObject gameMap, const char* sceneName
   info.name = sceneName;
   call<void>(GM_GETSCENEINFO, gameMap, name, zone, &info.scene, &info.sceneObj, &info.scenePos);
   info.isMapped = ui::isAlive(info.scene) && call<bool>(GMS_ISMAPPED, info.scene);
+  info.isDrawn = info.isMapped && call<bool>(GO_GETACTIVEINHIERARCHY, gameObjectOf(info.scene));
   return info;
 }
 
@@ -122,6 +124,8 @@ struct RefreshStats {
   int collected = 0;
   int visible = 0;
   int iconless = 0;
+  int noAreaMap = 0;
+  int visibleByKind[COLLECTIBLE_KIND_COUNT] = {};
 };
 
 inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, const CollectibleEntry& entry,
@@ -139,6 +143,9 @@ inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, co
     if (!info.isMapped) {
       ++stats.unmapped;
       isVisible = false;
+    } else if (!info.isDrawn) {
+      ++stats.noAreaMap;
+      isVisible = false;
     } else if (isCollected(entry)) {
       ++stats.collected;
       isVisible = false;
@@ -146,6 +153,7 @@ inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, co
   }
   setActive(marker, isVisible);
   stats.visible += isVisible ? 1 : 0;
+  stats.visibleByKind[static_cast<size_t>(entry.kind)] += isVisible ? 1 : 0;
 }
 
 #if SSHUD_HAS_COLLECTIBLES
@@ -204,9 +212,15 @@ inline void logMissingIcons() {
 }
 
 inline void logRefresh(const RefreshStats& stats, bool pinsEnabled) {
-  Logging.Log("[sshud] map: pins=%d created=%d visible=%d collected=%d unmapped=%d unplaceable=%d iconless=%d of %zu",
-              pinsEnabled ? 1 : 0, stats.created, stats.visible, stats.collected, stats.unmapped, stats.unplaceable,
-              stats.iconless, COLLECTIBLE_COUNT);
+  Logging.Log("[sshud] map: pins=%d created=%d visible=%d collected=%d unmapped=%d noAreaMap=%d unplaceable=%d "
+              "iconless=%d of %zu",
+              pinsEnabled ? 1 : 0, stats.created, stats.visible, stats.collected, stats.unmapped, stats.noAreaMap,
+              stats.unplaceable, stats.iconless, COLLECTIBLE_COUNT);
+  for (size_t kind = 0; kind < COLLECTIBLE_KIND_COUNT; ++kind) {
+    if (stats.visibleByKind[kind] > 0) {
+      Logging.Log("[sshud] map: visible %s=%d", COLLECTIBLE_KIND_NAMES[kind], stats.visibleByKind[kind]);
+    }
+  }
 }
 
 inline void refreshMarkers(ui::ManagedObject gameMap) {
