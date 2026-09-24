@@ -672,6 +672,19 @@
       "method": "EnableUnlockedAreas",
       "required": true,
       "_note": "启用已买地图的区域；大地图里它在 SetupMapMarkers 之后才调"
+    },
+    {
+      "name": "GAMEMGR_GETINSTANCE",
+      "class": "GameManager",
+      "method": "get_instance",
+      "required": true
+    },
+    {
+      "name": "GAMEMGR_SAVELEVELSTATE",
+      "class": "GameManager",
+      "method": "SaveLevelState",
+      "required": true,
+      "_note": "触发 SavePersistentObjects：房间内物品把状态写进 SceneData（离开房间时游戏做的同一件事）"
     }
   ],
   "script": [

@@ -9,6 +9,8 @@
 //     换成游戏自带图标（map_icons.hpp）；图标没找到时退回按分类染色的圆点。
 //   - 定位：GetMapZoneFromSceneName → GetSceneInfo → GetMapPosition（游戏放尸体标记同款）。
 //   - 显隐：组合键开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
+//   - 刷新前先调 GameManager.SaveLevelState：游戏平时只在离开房间时把房间内物品状态写进 SceneData，
+//     不调的话在同一房间捡完东西马上开图，图标还在。
 //
 // 托管对象全部"现取现用"，不跨帧持有托管指针（原生持有的引用 GC 看不见）：
 // 我们的标记在 markerParent 下是连续一段子节点，每次刷新 Find("sshud_pin_0")
@@ -225,7 +227,14 @@ inline void logRefresh(const RefreshStats& stats, bool pinsEnabled) {
   }
 }
 
+/// 让当前房间的持久物品把状态写进 SceneData（与离开房间时相同）
+inline void saveCurrentRoomState() {
+  ui::ManagedObject gameManager = call<ui::ManagedObject>(GAMEMGR_GETINSTANCE);
+  if (ui::isAlive(gameManager)) call<void>(GAMEMGR_SAVELEVELSTATE, gameManager);
+}
+
 inline void refreshMarkers(ui::ManagedObject gameMap) {
+  saveCurrentRoomState();
   ui::ManagedObject parent = ui::readField<ui::ManagedObject>(gameMap, GM_MARKERPARENT);
   ui::ManagedObject tpl = markerTemplate(gameMap);
   if (!ui::isAlive(parent) || !ui::isAlive(tpl)) {

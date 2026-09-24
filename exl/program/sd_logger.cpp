@@ -32,7 +32,6 @@ enum class State : uint8_t { Buffering, Writing, Failed };
 State s_state = State::Buffering;
 char s_pending[PENDING_CAPACITY];
 size_t s_pendingLength = 0;
-nn::fs::FileHandle s_file{};
 int64_t s_offset = 0;
 
 /// 直接走 svc 日志报错，避免递归进 SdLogger
@@ -52,11 +51,17 @@ void bufferLine(std::string_view text) {
   s_pending[s_pendingLength++] = '\n';
 }
 
+/// 每次写都开 → 写 → 关：文件不被游戏一直占着，游戏运行中也能远程读日志
 bool writeBytes(const void* data, size_t size) {
-  const Result rc = nn::fs::WriteFile(s_file, s_offset, data, size,
-                                      nn::fs::WriteOption::CreateOption(nn::fs::WriteOptionFlag_Flush));
+  nn::fs::FileHandle file{};
+  Result rc = nn::fs::OpenFile(&file, LOG_PATH, nn::fs::OpenMode_Write | nn::fs::OpenMode_Append);
+  if (R_SUCCEEDED(rc)) {
+    rc = nn::fs::WriteFile(file, s_offset, data, size,
+                           nn::fs::WriteOption::CreateOption(nn::fs::WriteOptionFlag_Flush));
+    nn::fs::CloseFile(file);
+  }
   if (R_FAILED(rc)) {
-    reportFailure("WriteFile", rc);
+    reportFailure("OpenFile/WriteFile", rc);
     return false;
   }
   s_offset += static_cast<int64_t>(size);
@@ -77,9 +82,7 @@ Result openFreshLog() {
   nn::fs::CreateDirectory(CONFIG_DIR);
   nn::fs::CreateDirectory(LOG_DIR);
   nn::fs::DeleteFile(LOG_PATH);
-  const Result rc = nn::fs::CreateFile(LOG_PATH, 0);
-  if (R_FAILED(rc)) return rc;
-  return nn::fs::OpenFile(&s_file, LOG_PATH, nn::fs::OpenMode_Write | nn::fs::OpenMode_Append);
+  return nn::fs::CreateFile(LOG_PATH, 0);
 }
 
 }  // namespace
@@ -99,7 +102,7 @@ void start() {
   Result rc = nn::fs::MountSdCardForDebug(MOUNT_NAME);
   if (R_FAILED(rc)) return reportFailure("MountSdCardForDebug", rc);
   rc = openFreshLog();
-  if (R_FAILED(rc)) return reportFailure("CreateFile/OpenFile", rc);
+  if (R_FAILED(rc)) return reportFailure("CreateFile", rc);
   s_state = State::Writing;
   if (writeBytes(s_pending, s_pendingLength)) s_pendingLength = 0;
 }
