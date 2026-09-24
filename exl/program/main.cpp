@@ -59,7 +59,7 @@ const uint8_t* findBuildId() {
 bool verifyBuildId() {
   const uint8_t* buildId = findBuildId();
   if (buildId == nullptr) {
-    Logging.Log("[sshud] .rodata 里没找到 GNU build-id，放弃");
+    Logging.Log("[sshud] GNU build-id note not found in .rodata, giving up");
     return false;
   }
   char actual[BUILD_ID_PREFIX_BYTES * 2 + 1] = {};
@@ -67,8 +67,8 @@ bool verifyBuildId() {
     std::snprintf(actual + i * 2, 3, "%02X", buildId[i]);
   }
   const bool isMatch = std::strncmp(actual, SS_BUILD_ID_STR, sizeof(actual) - 1) == 0;
-  Logging.Log("[sshud] Build ID %s，期望 %s → %s", actual, SS_BUILD_ID_STR,
-              isMatch ? "匹配" : "不匹配，不装 hook");
+  Logging.Log("[sshud] build id %s, expected %s -> %s", actual, SS_BUILD_ID_STR,
+              isMatch ? "match" : "MISMATCH, hooks not installed");
   return isMatch;
 }
 
@@ -112,12 +112,12 @@ extern "C" void exl_main(void* x0, void* x1) {
   exl::hook::Initialize();
 
   const auto& mainModule = exl::util::GetMainModuleInfo();
-  Logging.Log("[sshud] 已加载，main @ 0x%lx（.text 0x%lx 字节）", mainModule.m_Total.m_Start,
+  Logging.Log("[sshud] loaded, main @ 0x%lx (.text 0x%lx bytes)", mainModule.m_Total.m_Start,
               mainModule.m_Text.m_Size);
   if (!verifyBuildId()) return;
 
   TakeDamageHook::InstallAtOffset(HM_TAKEDAMAGE);
-  Logging.Log("[sshud] TakeDamage hook 已安装 @ main+0x%lx", static_cast<unsigned long>(HM_TAKEDAMAGE));
+  Logging.Log("[sshud] TakeDamage hook installed @ main+0x%lx", static_cast<unsigned long>(HM_TAKEDAMAGE));
 }
 
 extern "C" NORETURN void exl_exception_entry() {
