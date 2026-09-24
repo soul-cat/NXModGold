@@ -194,7 +194,7 @@ TakeDamage（正确值 `0x23A3040`）；版本库里的 `plugin/sshud.elf.full` 
 
 | 环节 | 状态 |
 |---|---|
-| overlay 常驻层（"等待插件…"、Tesla 组合键显隐、NACP 列表） | ✅ 全通 |
+| overlay 常驻层（"等待插件…"、NACP 列表） | ✅；关闭 / 输入穿透曾失效，已修（坑 6），待实机验证 |
 | 插件 ELF 加载（符号绑定、main 执行到 GetBID） | ✅ 全通（日志铁证） |
 | 游戏正常启动（不再 2168-0002） | ✅（签名校验后） |
 | TakeDamage hook 安装 | ❓ 前次 12 区域扫描没找到签名匹配 → 已扩到 48，待验证 |
@@ -324,18 +324,27 @@ Core 在 `LoadPlugins()`(`main.c:466`) 之后立刻 `SaltySD_Deinit()`(`:496`)�
 已经在 `main.cpp` 里覆写了 `__libnx_exit`，别动那段。
 插件也不能用游戏的堆，自带了 `g_fakeHeap`。
 
-### 6. overlay 的输入是**复制**，不是移交；退出键就是 Tesla 组合键
+### 6. overlay 的输入是**复制**，不是移交；关闭方式（2026-09-24 修正）
 
 overlay 进程是 `AppletType_None`，直接读 HID 共享内存，
 所以**游戏和 overlay 会同时收到同一次按键**。加热键时务必避开游戏用到的键。
 
-显隐/退出的正确方式（vendored tesla 的 hidPoller 在输入线程层面处理，
-FullMode=false 的输入穿透模式下 Gui::handleInput 根本不会被调用，
-别往里加退出逻辑——实机验证过无效）：
-  - HUD 显示中按 **Tesla 呼出组合键（L+↓+右摇杆按下）或 Home 键** → 隐藏
-  - 隐藏后再按组合键 → 恢复
-  - 常驻期间组合键被本 overlay 独占，Tesla-Menu 不会弹出（预期行为）
-  - 挂起状态下按键无效（整个进程冻结），必须在游戏运行中操作
+实机症状（修正前）：打开后关不掉、游戏按不动（只能调出关机界面再取消恢复画面），
+之后 Tesla 菜单呼不出、HUD 残留。根因全部在代码里（`tesla.hpp` 行号指 vendored fork）：
+  - fork 的 `Overlay::hide()` 不播淡出（:2019），`m_shouldHide` 只在淡出结束时置位（:2138）
+    → `hide()` 永远结束不了主循环；Tesla 组合键 / Home / 电源键都只调 `hide()`（:2413-2474），
+    输入线程还把 `overlayOpen` 记成 false，状态失步，Tesla 菜单再也呼不出。
+  - 主循环显示前 `requestForeground(true)`（:2568）在 Gui 构造函数的 `requestForeground(false)`
+    **之后**执行 → 游戏输入被关。析构里的 `requestForeground(true)` 又在循环还原输入之后执行。
+  - 旧退出键判 `(keysDown & combo) == combo`，要求三键同一帧按下，几乎触发不了；
+    `handleInput` 其实每帧都会被调用（:2578），之前"不会被调用"的结论是错的。
+
+现在的行为（`overlay/source/main.cpp`）：
+  - `onShow()` 里 `requestForeground(false)`：显示期间游戏照常操作。
+  - `onHide()` 里 `close()`：Tesla 组合键（L+↓+右摇杆按下）/ Home / 电源键 = 退出 overlay。
+  - 自带退出键：按住 L+R 再按右摇杆 → `tsl::goBack()` → 退出。
+  - 析构不再抢输入。退出后 nx-ovlloader 回到 Tesla 菜单，组合键可再呼出。
+  - 以上未实机验证（Ryujinx 不跑 Tesla）。
 
 ---
 

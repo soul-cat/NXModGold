@@ -5,9 +5,16 @@
 //   TeslaFPS = <刷新率>                 接管帧节奏（禁用内建 60Hz 限速）
 //   deactivateOriginalFooter = true     去掉 "Back / OK" 页脚
 //   alphabackground = 0x0               fillScreen 变成透明清屏
-//   tsl::hlp::requestForeground(false)  把输入还给游戏
+//   tsl::hlp::requestForeground(false)  把输入还给游戏（必须在 onShow 里调，见下）
 //
-// 关键：**永远不要调用 hide()**。层一旦隐藏就只剩透明帧。
+// 关闭（实机踩坑后的做法，tesla.hpp 行号指 vendored fork）：
+//   - 这个 fork 的 Overlay::hide() 不播淡出动画（:2019），而只有淡出结束才置
+//     m_shouldHide（:2138），所以 hide() 永远不会让主循环退出。Tesla 组合键 /
+//     Home / 电源键都只调 hide()（:2413-2474）→ 以前层关不掉、Tesla 菜单也呼不出。
+//     这里在 onHide() 里直接 close()：这三种按键都变成"退出 overlay"。
+//   - 自带退出键：按住 L+R 再按右摇杆。handleInput 每帧都会被调用（:2578）。
+//   - 主循环每次显示前会 requestForeground(true)（:2568）抢走游戏输入，
+//     所以输入穿透必须在其后的 onShow() 里做，不能在 Gui 构造函数里做。
 //
 // ⚠️ 上游 WerWolv/libtesla 做不到这件事（framebuffer 尺寸写死 448x720、
 //    没有 setLayerPos()、OverlayFrame::draw 无条件画黑底和页脚）。
@@ -40,6 +47,10 @@ namespace {
 /// 各模式默认给到 1。但血条要跟手，1Hz 完全不能看。
 /// 20Hz 是权衡值；endFrame() 仍无条件 waitForVSync()，所以 60 是硬上限。
 constexpr uint8_t REFRESH_HZ = 20;
+
+/// 自带退出键：按住 L+R 再按右摇杆。按键会同时传进游戏，右摇杆按下游戏里没用到。
+constexpr uint64_t EXIT_HOLD = HidNpadButton_L | HidNpadButton_R;
+constexpr uint64_t EXIT_PRESS = HidNpadButton_StickR;
 
 SharedMemory g_shmem = {};
 bool g_shmemMapped = false;
@@ -202,16 +213,15 @@ class HudGui : public tsl::Gui {
     TeslaFPS = REFRESH_HZ;
     deactivateOriginalFooter = true;
     alphabackground = 0x0;
-    tsl::hlp::requestForeground(false);
   }
 
+  // 析构发生在主循环已把输入还给游戏之后，这里不能再 requestForeground(true)，
+  // 否则 overlay 退出后游戏收不到输入。
   ~HudGui() override {
-    // 退出时还原，否则会影响后续打开的其他 overlay
     FullMode = true;
     TeslaFPS = 0;
     deactivateOriginalFooter = false;
     alphabackground = 0xD;
-    tsl::hlp::requestForeground(true);
   }
 
   tsl::elm::Element* createUI() override {
@@ -221,10 +231,14 @@ class HudGui : public tsl::Gui {
     return frame;
   }
 
-  // 注意：常驻（FullMode=false）+ 输入穿透模式下 handleInput 不会被调用——
-  // 这个 tesla fork 在输入线程层面处理显隐：HUD 显示中按 Tesla 呼出组合键
-  // （L+↓+右摇杆按下）或 Home 键即隐藏，再按恢复（tesla.hpp hidPoller）。
-  // 所以这里不放任何退出逻辑，别再往这里加。
+  /// keysDown 只含本帧新按下的键，所以"按住的"看 keysHeld，"按一下的"看 keysDown。
+  /// 触摸参数写成 const HidTouchState&：fork 用宏 `#define touchInput &touchPos` 把基类参数变成了引用。
+  bool handleInput(u64 keysDown, u64 keysHeld, const HidTouchState&, HidAnalogStickState,
+                   HidAnalogStickState) override {
+    if ((keysHeld & EXIT_HOLD) != EXIT_HOLD || (keysDown & EXIT_PRESS) == 0) return false;
+    tsl::goBack();  // 唯一的 Gui 出栈 → CloseOnExit → close()
+    return true;
+  }
 
  private:
   void render(tsl::gfx::Renderer* renderer) {
@@ -259,6 +273,12 @@ class HudGui : public tsl::Gui {
 
 class HudOverlay : public tsl::Overlay {
  public:
+  /// 主循环在 show() 之前刚 requestForeground(true)，这里把输入还给游戏
+  void onShow() override { tsl::hlp::requestForeground(false); }
+
+  /// fork 的 hide() 不会结束主循环，改成直接退出（主循环随后还原输入、清屏、销毁图层）
+  void onHide() override { this->close(); }
+
   void initServices() override {
     mapSharedMemory();  // 失败不致命，render 里会重试并显示诊断
   }
