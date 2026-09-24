@@ -47,23 +47,10 @@ class Program
             Console.Error.WriteLine($"[debug] titlekey {parts[0]} gen {gen} 已注入(加密形态)");
         }
 
-        IFileSystem romfs;
-        using (var bs = new LocalStorage(baseNca, FileAccess.Read))
-        {
-            var baseN = new Nca(keyset, bs);
-            if (updNca == "-")
-            {
-                romfs = baseN.OpenFileSystem(NcaSectionType.Data, IntegrityCheckLevel.None);
-            }
-            else
-            {
-                using (var us = new LocalStorage(updNca, FileAccess.Read))
-                {
-                    var updN = new Nca(keyset, us);
-                    romfs = updN.OpenFileSystemWithPatch(baseN, NcaSectionType.Data, IntegrityCheckLevel.None);
-                }
-            }
-        }
+        // 存储不能用 using 包住：romfs 是惰性读取，读文件时才访问底层 NCA，
+        // 提前 Dispose 会在 CopyTo 时抛 ObjectDisposedException。进程退出时自然释放。
+        var baseN = new Nca(keyset, new LocalStorage(baseNca, FileAccess.Read));
+        IFileSystem romfs = OpenRomFs(keyset, baseN, updNca);
 
         if (!romfs.FileExists(innerPath))
         {
@@ -92,6 +79,20 @@ class Program
         return 0;
     }
 
+    /// <summary>
+    /// 打开 RomFS；有更新档时叠加增量。
+    /// 注意方向：在【基础版】上调用、把【更新档】作为参数（与 Ryujinx 的
+    /// mainNca.OpenFileSystemWithPatch(patchNca) 一致）。反过来调用会把基础版当成
+    /// 补丁盖在更新档上，得到的是基础版内容——曾因此拿到 v1.0.0 的 metadata。
+    /// </summary>
+    static IFileSystem OpenRomFs(KeySet keyset, Nca baseN, string updNca)
+    {
+        if (updNca == "-")
+            return baseN.OpenFileSystem(NcaSectionType.Data, IntegrityCheckLevel.None);
+        var updN = new Nca(keyset, new LocalStorage(updNca, FileAccess.Read));
+        return baseN.OpenFileSystemWithPatch(updN, NcaSectionType.Data, IntegrityCheckLevel.None);
+    }
+
     static void ExtractAll(string prodKeys, string titleKeys, string baseNca, string updNca, string destDir)
     {
         var keyset = KeySet.CreateDefaultKeySet();
@@ -106,10 +107,7 @@ class Program
         using (var bs = new LocalStorage(baseNca, FileAccess.Read))
         {
             var baseN = new Nca(keyset, bs);
-            IFileSystem romfs = updNca == "-"
-                ? baseN.OpenFileSystem(NcaSectionType.Data, IntegrityCheckLevel.None)
-                : new Nca(keyset, new LocalStorage(updNca, FileAccess.Read))
-                    .OpenFileSystemWithPatch(baseN, NcaSectionType.Data, IntegrityCheckLevel.None);
+            IFileSystem romfs = OpenRomFs(keyset, baseN, updNca);
             FileSystemExtensions.Extract(romfs, destDir, null);
             Console.WriteLine($"extracted -> {destDir}");
         }
