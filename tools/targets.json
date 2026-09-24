@@ -129,6 +129,13 @@
       "field": "geoRocks",
       "required": true,
       "_note": "念珠石剩余次数（与 persistentInts 同类型）"
+    },
+    {
+      "name": "GM_FLEAPINPARENTS",
+      "class": "GameMap",
+      "field": "fleaPinParents",
+      "required": true,
+      "_note": "Transform[]，游戏自己的跳蚤标记（取贴图用）"
     }
   ],
   "methods": [
@@ -545,6 +552,76 @@
       "class": "Transform",
       "namespace": "UnityEngine",
       "method": "get_childCount",
+      "required": true
+    },
+    {
+      "name": "SR_GETSPRITE",
+      "class": "SpriteRenderer",
+      "namespace": "UnityEngine",
+      "method": "get_sprite",
+      "required": true
+    },
+    {
+      "name": "SR_SETSPRITE",
+      "class": "SpriteRenderer",
+      "namespace": "UnityEngine",
+      "method": "set_sprite",
+      "required": true
+    },
+    {
+      "name": "TR_GETLOCALSCALE",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "get_localScale",
+      "required": true
+    },
+    {
+      "name": "TR_SETLOCALSCALE",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "set_localScale",
+      "required": true
+    },
+    {
+      "name": "UOBJ_GETNAME",
+      "class": "Object",
+      "namespace": "UnityEngine",
+      "method": "get_name",
+      "required": true
+    },
+    {
+      "name": "SYSOBJ_GETTYPE",
+      "class": "Object",
+      "namespace": "System",
+      "method": "GetType",
+      "required": true
+    },
+    {
+      "name": "RES_FINDOBJECTSOFTYPEALL",
+      "class": "Resources",
+      "namespace": "UnityEngine",
+      "method": "FindObjectsOfTypeAll",
+      "signature_contains": "Object[] FindObjectsOfTypeAll(Type type)",
+      "required": true
+    },
+    {
+      "name": "GAMEPLAY_GETSMALLGEOPREFAB",
+      "class": "Gameplay",
+      "namespace": "GlobalSettings",
+      "method": "get_SmallGeoPrefab",
+      "required": true,
+      "_note": "念珠图标（Completionist 同款）"
+    },
+    {
+      "name": "CIM_GETITEMBYNAME",
+      "class": "CollectableItemManager",
+      "method": "GetItemByName",
+      "required": true
+    },
+    {
+      "name": "CI_GETCOLLECTIONICON",
+      "class": "CollectableItem",
+      "method": "GetCollectionIcon",
       "required": true
     }
   ],

@@ -37,6 +37,14 @@ enum class CheckKind : uint8_t {
   PlayerDataBool,        // PlayerData 在 playerDataOffset 处的 bool == true
 };
 
+/// 图标从哪来（照 Completionist Map 的 MapStyles：全用游戏自带贴图）
+enum class IconSource : uint8_t {
+  SpriteName,       // Resources.FindObjectsOfTypeAll(Sprite) 里按贴图名找（iconName）
+  SmallGeo,         // Gameplay.SmallGeoPrefab 的贴图（念珠）
+  FleaPin,          // 游戏自己跳蚤标记的贴图（缩放再乘它的 localScale）
+  CollectableItem,  // CollectableItemManager.GetItemByName(iconName).GetCollectionIcon()
+};
+
 struct CollectibleEntry {
   const char* scene;          // 场景名，如 "Crawl_02"（定位用；PlayerDataBool 也要）
   const char* persistentId;   // SceneData 条目 Id（PlayerDataBool 时为字段名，仅日志用）
@@ -48,6 +56,9 @@ struct CollectibleEntry {
   float worldY;
   float sceneWidth;           // 场景 tilemap 尺寸，GameMap.GetMapPosition 需要
   float sceneHeight;
+  IconSource iconSource;
+  const char* iconName;       // SpriteName / CollectableItem 用
+  float iconScale;            // 标记的 localScale
 };
 
 struct Tint {
@@ -57,7 +68,7 @@ struct Tint {
   float a;
 };
 
-/// 各分类的标记颜色（乘在模板贴图上）
+/// 找不到图标时的退路：模板圆点按分类染色
 constexpr Tint tintFor(CollectibleKind kind) {
   switch (kind) {
     case CollectibleKind::MaskShard:      return {0.55f, 0.85f, 1.00f, 1.0f};  // 淡蓝

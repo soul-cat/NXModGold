@@ -8,20 +8,13 @@
 
 #pragma once
 
-#include "lib.hpp"
+#include "map_calls.hpp"
 #include "map_markers_data.hpp"
-#include "unity_api.hpp"
 
 namespace sshud::map {
 
-namespace ui = sshud::unity;
-
 constexpr uintptr_t PERSISTENT_BOOL_VALUE = 0x21;  // SerializableBoolData.Value（反汇编核实）
 constexpr uintptr_t PERSISTENT_INT_VALUE = 0x24;   // SerializableIntData.Value（游戏 7 处调用点核实）
-
-inline ui::ManagedString managedString(const char* text) {
-  return ui::mainFunction<ui::ManagedString (*)(const char*, const void*)>(MARSHAL_PTRTOSTRANSI)(text, nullptr);
-}
 
 inline const void* methodInfoFromSlot(uintptr_t slotRva, bool& isInitialized) {
   auto* slot = reinterpret_cast<const void**>(exl::util::modules::GetTargetOffset(slotRva));
