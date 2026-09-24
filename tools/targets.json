@@ -96,6 +96,25 @@
       "field": "displayName",
       "required": true,
       "_note": "LocalisedString 值类型字段（内联在对象里），对它调 ToString() 得本地化名"
+    },
+    {
+      "name": "GM_MARKERTEMPLATES",
+      "class": "GameMap",
+      "field": "mapMarkerTemplates",
+      "required": true,
+      "_note": "GameObject[]；[0] 是玩家手动标记模板（Completionist 同款）"
+    },
+    {
+      "name": "GM_MARKERPARENT",
+      "class": "GameMap",
+      "field": "markerParent",
+      "required": true
+    },
+    {
+      "name": "SD_PERSISTENTBOOLS",
+      "class": "SceneData",
+      "field": "persistentBools",
+      "required": true
     }
   ],
   "methods": [
@@ -351,6 +370,160 @@
       "signature_contains": "public override string ToString()",
       "required": true,
       "_note": "拼 \"hp/max\" 的分隔符：没有现成的托管字符串字面量可取，用 '/'.ToString() 生成"
+    },
+    {
+      "name": "GM_SETUPMAPMARKERS",
+      "class": "GameMap",
+      "method": "SetupMapMarkers",
+      "required": true,
+      "_note": "刷新点：开大地图/快速地图都会调"
+    },
+    {
+      "name": "GM_GETMAPZONEFROMSCENE",
+      "class": "GameMap",
+      "method": "GetMapZoneFromSceneName",
+      "required": true
+    },
+    {
+      "name": "GM_GETSCENEINFO",
+      "class": "GameMap",
+      "method": "GetSceneInfo",
+      "required": true
+    },
+    {
+      "name": "GM_GETMAPPOSITION",
+      "class": "GameMap",
+      "method": "GetMapPosition",
+      "required": true
+    },
+    {
+      "name": "GMS_ISMAPPED",
+      "class": "GameMapScene",
+      "method": "get_IsMapped",
+      "required": true
+    },
+    {
+      "name": "MAPPIN_GETSTATE",
+      "class": "MapPin",
+      "method": "get_CurrentState",
+      "required": true,
+      "_note": "PinVisibilityStates：PinsAndKey=0 Pins=1 None=2"
+    },
+    {
+      "name": "SD_GETINSTANCE",
+      "class": "SceneData",
+      "method": "get_instance",
+      "required": true
+    },
+    {
+      "name": "UOBJ_INSTANTIATE",
+      "class": "Object",
+      "method": "Instantiate",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "Instantiate(Object original, Transform parent, bool instantiateInWorldSpace)"
+    },
+    {
+      "name": "UOBJ_DESTROY",
+      "class": "Object",
+      "method": "Destroy",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "Destroy(Object obj)"
+    },
+    {
+      "name": "GO_SETACTIVE",
+      "class": "GameObject",
+      "method": "SetActive",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GO_GETTRANSFORM",
+      "class": "GameObject",
+      "method": "get_transform",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GO_GETCOMPONENT_STR",
+      "class": "GameObject",
+      "method": "GetComponent",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "Component GetComponent(string type)"
+    },
+    {
+      "name": "TR_GETLOCALPOSITION",
+      "class": "Transform",
+      "method": "get_localPosition",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "TR_SETLOCALPOSITION",
+      "class": "Transform",
+      "method": "set_localPosition",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "SR_SETCOLOR",
+      "class": "SpriteRenderer",
+      "method": "set_color",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "MARSHAL_PTRTOSTRANSI",
+      "class": "Marshal",
+      "method": "PtrToStringAnsi",
+      "required": true,
+      "namespace": "System.Runtime.InteropServices",
+      "signature_contains": "PtrToStringAnsi(IntPtr ptr)"
+    },
+    {
+      "name": "TR_FIND",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "Find",
+      "signature_contains": "Transform Find(string n)",
+      "required": true,
+      "_note": "每次刷新按名字找回自己的标记，避免跨帧持有托管引用"
+    },
+    {
+      "name": "UOBJ_SETNAME",
+      "class": "Object",
+      "namespace": "UnityEngine",
+      "method": "set_name",
+      "required": true
+    },
+    {
+      "name": "COMP_GETGAMEOBJECT",
+      "class": "Component",
+      "namespace": "UnityEngine",
+      "method": "get_gameObject",
+      "required": true
+    }
+  ],
+  "script": [
+    {
+      "name": "PDC_BOOL_TRYGETVALUE",
+      "kind": "method",
+      "script_name": "SceneData.PersistentItemDataCollection<bool, object>$$TryGetValue",
+      "_note": "共享泛型实现：bool (coll, sceneName, id, out data, MethodInfo*)；值在 data+0x21"
+    },
+    {
+      "name": "PDC_BOOL_TRYGETVALUE_MI",
+      "kind": "metadata_slot",
+      "script_name": "Method$SceneData.PersistentItemDataCollection<bool, SceneData.SerializableBoolData>.TryGetValue()",
+      "_note": "上面调用要传的 MethodInfo* 所在槽位；先用 IL2CPP_INIT_METADATA 初始化"
+    },
+    {
+      "name": "IL2CPP_INIT_METADATA",
+      "kind": "first_bl_in",
+      "script_name": "MapPinConditional.Condition$$get_IsFulfilled",
+      "_note": "il2cpp_codegen_initialize_runtime_metadata(slot*, 1)，无符号，取该方法第一条 BL"
     }
   ]
 }

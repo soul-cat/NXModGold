@@ -308,6 +308,11 @@ def main() -> int:
         help="解包后的 main 镜像，取 RVA0 前 16 字节生成运行时签名（找不到则跳过）",
     )
     parser.add_argument(
+        "--script",
+        default=str(REPO_ROOT / "work" / "il2cpp" / "script.json"),
+        help="Il2CppDumper 的 script.json（共享泛型实例与 metadata 槽位只在这里有）",
+    )
+    parser.add_argument(
         "--image-size",
         default="0",
         help="模块镜像大小（含 .bss），用于校验 RVA 在合法范围内。"
@@ -341,6 +346,16 @@ def main() -> int:
     image_size = int(args.image_size, 0)
 
     lines, missing = build_header(types, targets, args.build_id, image_size, main_sig)
+
+    # dump.cs 之外的地址（共享泛型实例、metadata 槽、无符号的运行时函数），插在 #endif 之前
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from offsets_script import emit_script_entries
+
+    script_lines = emit_script_entries(
+        targets.get("script", []), Path(args.script), Path(args.main_bin), missing
+    )
+    endif_at = lines.index("#endif  // SS_OFFSETS_H")
+    lines[endif_at:endif_at] = script_lines + [""]
 
     if missing:
         print("[x] 必需符号缺失：" + ", ".join(missing), file=sys.stderr)
