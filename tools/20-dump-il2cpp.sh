@@ -55,7 +55,8 @@ if git -C "$(dirname "$DLL")/../../.." apply --check "$REPO/tools/il2cppdumper-u
   step "应用 Unity 6 兼容补丁"
   git -C "$(dirname "$DLL")/../../.." apply "$REPO/tools/il2cppdumper-unity6.patch" \
     || die "补丁应用失败"
-  dotnet build "$(dirname "$DLL")/../.." -c Release -v q >/dev/null \
+  # DLL 在 <项目>/bin/Release/net8.0/，项目目录是其上三级
+  dotnet build "$(dirname "$DLL")/../../.." -c Release -f net8.0 -v q >/dev/null \
     || die "补丁后重新构建失败"
 else
   printf "  %s补丁已应用（或无需应用）%s\n" "$DIM" "$RST"
@@ -96,7 +97,9 @@ printf "  %s输出: %s%s\n" "$DIM" "$OUT" "$RST"
 # Unity 6 下自动搜索必然失败（image 数与 codeGenModules 数解耦），失败后用
 # tools/find-il2cpp-registrations.py 定位地址走手动模式。
 set +e
-DOTNET_ROLL_FORWARD=LatestMajor dotnet "$DLL" "$NSO" "$META" "$OUT" > /tmp/il2cppdump.log 2>&1
+# stdin 必须接 /dev/null：自动搜索失败后它会停在 "Input CodeRegistration:" 等输入，
+# 若继承了一个开着的 stdin 就会永远挂住（0% CPU）。
+DOTNET_ROLL_FORWARD=LatestMajor dotnet "$DLL" "$NSO" "$META" "$OUT" < /dev/null > /tmp/il2cppdump.log 2>&1
 rc=$?
 set -e
 grep -v "^\[OPEN\]" /tmp/il2cppdump.log | tail -8 | sed 's/^/  /'
