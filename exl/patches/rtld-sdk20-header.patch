@@ -1,0 +1,18 @@
+--- a/source/lib/init/crt0.s	2026-09-24 12:25:12
++++ b/source/lib/init/crt0.s	2026-09-24 12:25:12
+@@ -16,8 +16,14 @@
+ 
+ .global __module_start
+ __module_start:
+-    b entrypoint
++    // SDK 20+ rtld only treats a module as the legacy header when word 0 is
++    // 0 / 0xEA000000 / 0x14000002 (b +8); otherwise it reads word 2 as an offset
++    // to an extended header. `b entrypoint` (0x14000008) made it dereference the
++    // nop below and fault. Keep word 0 as `b +8` and jump to the entry from +8.
++    b 1f
+     .word __nx_mod0 - __module_start
++1:
++    b entrypoint
+ 
+     .align 4
+     .ascii "~~exlaunch uwu~~"

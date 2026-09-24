@@ -9,7 +9,7 @@
 #
 # vendor/exlaunch 是模板仓库，程序代码要放进它的 source/program/。
 # 为了不改 vendor，每次构建把它同步到 build/sshud/，再把 program/ 和
-# config.mk 覆盖进去。
+# config.mk 覆盖进去，并应用 patches/ 下的修补。
 
 ifeq ($(strip $(DEVKITPRO)),)
 $(error DEVKITPRO 未设置。执行 export DEVKITPRO=/opt/devkitpro)
@@ -60,6 +60,8 @@ stage:
 	  $(EXLAUNCH)/ $(STAGE)/
 	@rsync -a --delete $(CURDIR)/program/ $(STAGE)/source/program/
 	@cp $(CURDIR)/config.mk $(STAGE)/config.mk
+	@# 对 exlaunch 的修补（每次 stage 都从 vendor 原样同步，所以总是打在干净文件上）
+	@for p in $(CURDIR)/patches/*.patch; do patch -s -p1 -d $(STAGE) < $$p || exit 1; done
 
 clean:
 	@rm -rf $(CURDIR)/build $(CURDIR)/deploy
