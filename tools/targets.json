@@ -24,7 +24,9 @@
       "class": "HealthManager",
       "field": "initHp",
       "required": true,
-      "aliases": ["initHP"],
+      "aliases": [
+        "initHP"
+      ],
       "_note": "private int，最大血量。没有 maxHP 这个名字"
     },
     {
@@ -103,6 +105,79 @@
       "method": "Die",
       "required": false,
       "_note": "有 3 个重载，生成器会全部列出"
+    },
+    {
+      "name": "CAM_GETMAIN",
+      "class": "Camera",
+      "namespace": "UnityEngine",
+      "method": "get_main",
+      "required": true,
+      "_note": "static Camera Camera.main"
+    },
+    {
+      "name": "CAM_WORLDTOSCREEN",
+      "class": "Camera",
+      "namespace": "UnityEngine",
+      "method": "WorldToScreenPoint",
+      "signature_contains": "WorldToScreenPoint(Vector3 position)",
+      "required": true,
+      "_note": "单参重载；另一个带 MonoOrStereoscopicEye 的排在前面，必须按签名挑"
+    },
+    {
+      "name": "CAM_PIXELWIDTH",
+      "class": "Camera",
+      "namespace": "UnityEngine",
+      "method": "get_pixelWidth",
+      "required": true
+    },
+    {
+      "name": "CAM_PIXELHEIGHT",
+      "class": "Camera",
+      "namespace": "UnityEngine",
+      "method": "get_pixelHeight",
+      "required": true
+    },
+    {
+      "name": "COMP_GETTRANSFORM",
+      "class": "Component",
+      "namespace": "UnityEngine",
+      "method": "get_transform",
+      "required": true
+    },
+    {
+      "name": "TR_GETPOSITION",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "get_position",
+      "required": true
+    },
+    {
+      "name": "PMGUI_ONGUI",
+      "class": "PlayMakerGUI",
+      "method": "OnGUI",
+      "required": false,
+      "_note": "探测：候选的每帧 IMGUI 回调"
+    },
+    {
+      "name": "GUIDRAWER_ONGUI",
+      "class": "GUIDrawer",
+      "method": "OnGUI",
+      "required": false,
+      "_note": "探测：候选的每帧 IMGUI 回调"
+    },
+    {
+      "name": "CAMCTRL_LATEUPDATE",
+      "class": "CameraController",
+      "method": "LateUpdate",
+      "required": false,
+      "_note": "探测：候选的每帧主线程回调"
+    },
+    {
+      "name": "HERO_LATEUPDATE",
+      "class": "HeroController",
+      "method": "LateUpdate",
+      "required": false,
+      "_note": "探测：候选的每帧主线程回调"
     }
   ]
 }

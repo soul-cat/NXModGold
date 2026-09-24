@@ -212,6 +212,10 @@ def _emit_methods(
     for spec in specs:
         info = find_type(types, spec["class"], spec.get("namespace"))
         entries = info.methods.get(spec["method"], []) if info is not None else []
+        # 有重载时用 signature_contains 精确挑选（如 WorldToScreenPoint(Vector3 position)）
+        wanted = spec.get("signature_contains")
+        if wanted:
+            entries = [entry for entry in entries if wanted in entry.signature]
         usable = [entry for entry in entries if entry.rva is not None]
 
         if not usable:
