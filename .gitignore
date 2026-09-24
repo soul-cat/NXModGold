@@ -27,6 +27,7 @@ session/
 *.csv
 
 # --- 游戏转储与版权产物（绝不入库）---
+datas/
 dump/
 work/
 *.nsp
