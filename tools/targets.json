@@ -115,6 +115,20 @@
       "class": "SceneData",
       "field": "persistentBools",
       "required": true
+    },
+    {
+      "name": "SD_PERSISTENTINTS",
+      "class": "SceneData",
+      "field": "persistentInts",
+      "required": true,
+      "_note": "念珠缓存等计数"
+    },
+    {
+      "name": "SD_GEOROCKS",
+      "class": "SceneData",
+      "field": "geoRocks",
+      "required": true,
+      "_note": "念珠石剩余次数（与 persistentInts 同类型）"
     }
   ],
   "methods": [
@@ -504,6 +518,34 @@
       "namespace": "UnityEngine",
       "method": "get_gameObject",
       "required": true
+    },
+    {
+      "name": "PD_GETINSTANCE",
+      "class": "PlayerData",
+      "method": "get_instance",
+      "required": true
+    },
+    {
+      "name": "TR_GETCHILD",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "GetChild",
+      "signature_contains": "GetChild(int index)",
+      "required": true
+    },
+    {
+      "name": "TR_GETSIBLINGINDEX",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "GetSiblingIndex",
+      "required": true
+    },
+    {
+      "name": "TR_GETCHILDCOUNT",
+      "class": "Transform",
+      "namespace": "UnityEngine",
+      "method": "get_childCount",
+      "required": true
     }
   ],
   "script": [
@@ -524,6 +566,17 @@
       "kind": "first_bl_in",
       "script_name": "MapPinConditional.Condition$$get_IsFulfilled",
       "_note": "il2cpp_codegen_initialize_runtime_metadata(slot*, 1)，无符号，取该方法第一条 BL"
+    },
+    {
+      "name": "PDC_INT_TRYGETVALUE",
+      "kind": "method",
+      "script_name": "SceneData.PersistentItemDataCollection<int, object>$$TryGetValue",
+      "_note": "共享泛型实现；值在 data+0x24（游戏 7 处调用点均 ldr w,[x,#36]，反汇编核实）"
+    },
+    {
+      "name": "PDC_INT_TRYGETVALUE_MI",
+      "kind": "metadata_slot",
+      "script_name": "Method$SceneData.PersistentItemDataCollection<int, SceneData.SerializableIntData>.TryGetValue()"
     }
   ]
 }

@@ -285,3 +285,65 @@ PlayerData 字段名已在 dump.cs 核对。**规律：地图上的拾取物几�
 | 3 | PD bool 判定（跳蚤 27 个） | 救过的跳蚤不显示 |
 | 4 | 场景持久布尔判定（面具碎片 14 个） | 拿过的碎片消失，没拿的显示 |
 | 5 | 生成器 + 完整数据表 | 各分类数量与数据表一致 |
+
+---
+
+## 5. 生成器 v2：全部收集物（`tools/50-gen-collectibles.py`）
+
+规则移植自 Completionist 源码，拆成 `tools/collectibles_tables.py`（Inaccessible、Useless、AssignStyles 等硬编码表）、
+`tools/collectibles_rules.py`（persistent_bools 的剔除 / 分类 / 物品类型）、`tools/collectibles_sources.py`（其它数据源）、
+`tools/collectibles_selftest.py`（`selftest` 子命令，20 项）。PlayerData 偏移只取 `dump.cs` 里 `PlayerData` 的 `bool` 字段。
+
+### 5.1 结果（Completionist_Map-1.0.3.zip + v1.0.3 dump，共 571 条）
+
+| 分类 | 条数 | 来源 / 判定 |
+|---|---|---|
+| MaskShard | 16 | 14 个拾取点 PB + 商店 PD 2（`PurchasedBonebottomHeartPiece`、`MerchantEnclaveShellFragment`） |
+| SpoolFragment | 17 | 13 PB + 商店 PD 3 + `MetCaravanTroupeLeaderJudge` |
+| Craftmetal | 8 | 6 PB + 商店 PD 2 |
+| Tool | 34 | 31 个拾取点 PB（按 item_locations 的 `Tools` 表）+ 丝技 3（`hasNeedleThrow`/`hasThreadSphere`/`hasSilkCharge`，原版归在 Tools） |
+| ToolkitUpgrade | 4 | 商店 PD |
+| Materium | 0 | 见 5.2 |
+| Relic | 18 | PB（`CollectableRelic` 表） |
+| Memento | 2 | PB |
+| MemoryLocket | 19 | 17 PB + 商店 PD 2 |
+| Collectable | 51 | 钥匙 / 任务物品 / 地图（地图机与地图检视点用 `Has*Map` PD） |
+| Rosary | 320 | 念珠缓存 141（PersistentIntAtLeast）、念珠石 33（GeoRockDepleted）、`Geo*`/`Craw_home*` 等 PB 111、念珠串拾取 30、可破坏物 5 |
+| ShellShard | 28 | `Shell Shard*` PB + `Shard Pouch` / `Great Shard` 拾取 |
+| MossBerry | 4 | `moss_berry_fruit` PB |
+| SilkEater | 9 | item_locations 的 `Silk Grub`（Under_20 按原版排除） |
+| Crest | 0 | 见 5.2 |
+| SilkHeart | 3 | tracker_markers 位置 + Boss 击败 PD |
+| Ability | 8 | playmakers 位置 + `has*` PD |
+| Flea | 30 | 27 个 `SavedFlea_<场景>` + `tamedGiantFlea` / `CaravanLechReturnedToCaravan` / `MetTroupeHunterWild` |
+
+判定方式：PersistentBool 321、PersistentIntAtLeast 141、GeoRockDepleted 33、PlayerDataBool 76。所有条目都查到了场景尺寸与 PD 偏移。
+
+跳蚤位置来源：Completionist 自己用游戏的跳蚤 pin（`GameMap.fleaPinParents`），数据包里没有；但 `item_fsm_actions.json`
+中 `SavedItemId == "FleasCollected Target"` 的 66 条正好覆盖 30 只跳蚤（每只 2~3 个变体，位置相差 < 3 单位，取第一条）。
+字段名规则 `SavedFlea_<CleanScenePath>` 与游戏 pin 名一致，27 个全部在 dump 中命中。
+
+### 5.2 跳过的及原因
+
+| 内容 | 数量 | 原因 |
+|---|---|---|
+| 纹章（Toolmaster/Spell/Warrior/Reaper/Wanderer/Witch） | 6 | 原版判定 `ToolCrest.IsUnlocked`（`PlayerData.ToolEquips` 集合），没有单独 bool |
+| Materium 分类 | — | 原版运行时查 `MateriumItemManager`，离线没有这张表；原版也把 Materium 显示为普通物品，这里归入 Collectable |
+| NPC / FSM 给的工具与物品（Flea Brew、Magnetite Dice、Pimpilo、Mossberry 等） | 33 | 无 `LinkedPDBool`，只能靠 `ToolItem.IsUnlocked` 等运行时状态 |
+| 纪念品 Memento Garmond ×5、Grey Memento ×2、Sprintmaster Memento；Materium 检视点 Magnetite/Smeltstone/Voltstone/Roach Corpse | 12 | 物体不带持久布尔也没有 linkedPDBool，原版靠 `IsListedInCollection` / `MateriumItem.IsCollected` |
+| 商店里没有 `PlayerDataBoolName` 的商品（工具、Compass 等） | 22 | 同上 |
+| 按 `alternateUnlockedTest` 找的工具（FindItemsByFlags 前半段） | — | 需要运行时 `ToolItemManager` |
+| breakable_holders 的念珠 / 贝壳碎片容器 | 171 | `persistentInts <= 0`，没有对应 CheckKind（`PersistentIntAtLeast` 只能 >=） |
+| 任务奖励、Sherma 的丝轴、Bone_12 瓢虫工具包（`pinGalleriesCompleted >= 1`） | — | 任务 / int 条件不在 4 种 CheckKind 内 |
+
+### 5.3 与原版的差异 / 未验证
+
+- 拾取物按 `ActualItemId` 定类（原版用 `Details`，遇到 "Deparent" 等说明文字会落到通用物品）。
+- Grindle 商店里与其它店重复的商品原版只是不计数，这里去掉（第三幕才出现）。
+- HiddenFromCount 的同物另一份摆放（`library_glass_heart_piece`、Slab_17 `Deparent`）在同场景已有同类条目时不重复画。
+- 可见性条件没法表达：第三幕才出现 / 第三幕消失的念珠（原版 `blackThreadWorld` FlagTest）会常驻显示；钢魂专属物品（`permadeathMode` SetOn）直接去掉。
+- 原版的 `Move()` 坐标修正只作用于战斗、单向墙、Bone_01b 苔莓、Void Tendrils，这几项都不在表里，所以没有移植。
+- `Great Shard` 归为 ShellShard——未验证（离线推断）。
+- 念珠串阈值照原版（`hitStateCount - 1`，名字含 `string` 再减 1），128 个缓存阈值为 0，即"有记录就算打过"——未验证。
+- `breakable_misc` 的 5 个念珠墓碑 `Persistent == false`，按原版查 persistentBools，可能永远查不到记录——未验证。
+- 子场景（`Bone_05_boss`、`Bone_East_08_boss_beastfly`、`Aqueduct_05_festival`，共 3 处）的尺寸先按 ActualScenePath 查，查不到才退到同名主场景——未验证子场景与主场景 tilemap 等大。
