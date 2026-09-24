@@ -4,6 +4,7 @@
 //   - 由游戏自己的 rtld 以 subsdk9 加载，不依赖 SaltyNX / Tesla，模拟器能跑。
 //   - hook 用 exlaunch 的 trampoline（svcMapProcessMemory 给 .text 建 RW 别名）。
 //   - 绘制在游戏进程内用 Unity IMGUI 完成（hud_hooks.hpp / hud_draw.hpp），
+//     地图收集物标记克隆游戏自己的标记模板（map_markers.hpp），
 //     日志走 svcOutputDebugString（Ryujinx 按 ASCII 解码，所以日志文本用英文）。
 //
 // 时机：rtld 在 main 的入口之前初始化 subsdk，所以 exl_main 跑的时候
@@ -14,6 +15,7 @@
 #include "lib.hpp"
 #include "offsets.h"
 #include "hud_hooks.hpp"
+#include "map_markers.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -85,6 +87,7 @@ extern "C" void exl_main(void* x0, void* x1) {
   if (!verifyBuildId()) return;
 
   sshud::hud::installHooks();
+  sshud::map::installHooks();
 }
 
 extern "C" NORETURN void exl_exception_entry() {
