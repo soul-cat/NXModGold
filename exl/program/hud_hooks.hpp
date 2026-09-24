@@ -39,8 +39,13 @@ inline void recordDamage(const HpSnapshot& before, float now) {
   g_model.onHit(before.manager, maxHp, now);
   const unity::Vector3 world = unity::worldPositionOf(before.manager);
   g_model.addPopup({world.x, world.y + POPUP_START_OFFSET_UNITS, world.z}, damage, now);
-  Logging.Log("[sshud] hit hm=%p hp %d -> %d / %d dmg %d boss=%d", before.manager, before.hp, after, maxHp,
-              damage, isBoss(maxHp) ? 1 : 0);
+  // size / big / kills：调研"怎样才算 BOSS"用（PC 版只看血量 > 105，大怪也会被当成 BOSS）
+  const uint8_t* record = journalRecordOf(before.manager);
+  Logging.Log("[sshud] hit hm=%p hp %d -> %d / %d dmg %d boss=%d size=%d big=%d kills=%d", before.manager,
+              before.hp, after, maxHp, damage, isBoss(maxHp) ? 1 : 0,
+              unity::readField<int32_t>(before.manager, HM_ENEMYSIZE),
+              unity::readField<bool>(before.manager, HM_BIGENEMYDEATH) ? 1 : 0,
+              record != nullptr ? unity::readField<int32_t>(record, EJR_KILLSREQUIRED) : -1);
 }
 
 }  // namespace sshud::hud

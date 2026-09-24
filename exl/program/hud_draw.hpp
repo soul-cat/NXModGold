@@ -116,13 +116,18 @@ inline ui::ManagedString healthText(int32_t hp, int32_t maxHp) {
                     ui::intToString(maxHp));
 }
 
-/// HealthManager → EnemyDeathEffects → journalRecord → displayName（猎人日志本地化名）
-inline ui::ManagedString bossName(const void* manager) {
+/// HealthManager → EnemyDeathEffects → journalRecord（猎人日志条目）；没有返回 null
+inline const uint8_t* journalRecordOf(const void* manager) {
   const void* effects = ui::readField<const void*>(manager, HM_DEATHEFFECTS);
   if (!ui::isAlive(effects)) return nullptr;
   const auto* record = ui::readField<const uint8_t*>(effects, EDE_JOURNALRECORD);
-  if (!ui::isAlive(record)) return nullptr;
-  return ui::localisedToString(record + EJR_DISPLAYNAME);
+  return ui::isAlive(record) ? record : nullptr;
+}
+
+/// 猎人日志本地化名
+inline ui::ManagedString bossName(const void* manager) {
+  const uint8_t* record = journalRecordOf(manager);
+  return record != nullptr ? ui::localisedToString(record + EJR_DISPLAYNAME) : nullptr;
 }
 
 inline void drawBoss(const Frame& frame, const Enemy& enemy, int32_t hp, int index) {

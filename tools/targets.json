@@ -136,6 +136,25 @@
       "field": "fleaPinParents",
       "required": true,
       "_note": "Transform[]，游戏自己的跳蚤标记（取贴图用）"
+    },
+    {
+      "name": "HM_ENEMYSIZE",
+      "class": "HealthManager",
+      "field": "enemySize",
+      "required": true,
+      "_note": "Small=0 Regular=1 Large=2（Boss 判定调研用）"
+    },
+    {
+      "name": "HM_BIGENEMYDEATH",
+      "class": "HealthManager",
+      "field": "bigEnemyDeath",
+      "required": true
+    },
+    {
+      "name": "EJR_KILLSREQUIRED",
+      "class": "EnemyJournalRecord",
+      "field": "killsRequired",
+      "required": true
     }
   ],
   "methods": [
