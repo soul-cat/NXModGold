@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""把 BOSS 血条贴图（exl/assets/*.png，作者自绘）切成三段，生成 exl/program/bar_textures.gen.h。
+"""把 BOSS 血条贴图（exl/assets/*.png，作者自绘）切成三段，连同开关面板文字贴图
+（exl/assets/menu/*.png，由 tools/61-render-menu-text.py 渲染）一起生成 exl/program/bar_textures.gen.h。
 
 贴图是纯白 + alpha，运行时按颜色染色。IMGUI 在本游戏里没有按纹理坐标画的接口（DrawTextureWithTexCoords
 被裁掉了），所以离线切成 左端 / 中段 / 右端 三张小贴图：两端按原比例画，中段横向拉伸（三宫格），
 尖角在任何宽度下都不变形。端头宽度自动识别：从两边往里找第一列与正中间那一列完全相同的位置。
+
+面板文字贴图不切片，按文件名排序整张输出为 MENU_TEXT_<大写文件名>（如 menu/enemy_bars.png →
+MENU_TEXT_ENEMY_BARS），并给出共同高度 MENU_TEXT_SOURCE_HEIGHT；各张高度不一致时直接报错。
 
 Unity 的原始纹理数据是自下而上存行，这里提前上下翻转。
 
@@ -22,6 +26,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS = REPO_ROOT / "exl" / "assets"
+MENU_ASSETS = ASSETS / "menu"
+MENU_PREFIX = "MENU_TEXT"
 OUT = REPO_ROOT / "exl" / "program" / "bar_textures.gen.h"
 MIDDLE_WIDTH = 4  # 中段只需几列，反正要拉伸
 TEXTURES = (("BOSS_FRAME", "boss_frame.png"), ("BOSS_FILL", "boss_fill.png"))
@@ -119,6 +125,26 @@ def render_blob(name: str, image: Image.Image) -> list[str]:
     return lines
 
 
+def menu_blob_name(path: Path) -> str:
+    return f"{MENU_PREFIX}_{path.stem.upper()}"
+
+
+def render_menu_texts() -> list[str]:
+    """面板文字贴图整张输出；要求所有图高度相同，行才能对齐。"""
+    images = {menu_blob_name(path): read_png(path) for path in sorted(MENU_ASSETS.glob("*.png"))}
+    if not images:
+        return []
+    heights = {image.height for image in images.values()}
+    if len(heights) != 1:
+        raise ValueError(f"{MENU_ASSETS} 下贴图高度不一致：{sorted(heights)}")
+    body = [f"inline constexpr float {MENU_PREFIX}_SOURCE_HEIGHT = {heights.pop()}.0f;"]
+    for name, image in images.items():
+        body.append(f"// {name}: {image.width}x{image.height}")
+        body += render_blob(name, image)
+    body.append("")
+    return body
+
+
 def render_header() -> str:
     body: list[str] = []
     for prefix, file_name in TEXTURES:
@@ -128,8 +154,9 @@ def render_header() -> str:
         for part, piece in slice_image(image).items():
             body += render_blob(f"{prefix}_{part}", piece)
         body.append("")
+    body += render_menu_texts()
     return "\n".join([
-        "// 由 tools/60-gen-bar-textures.py 从 exl/assets/*.png 生成 —— 不要手改，不入库。",
+        "// 由 tools/60-gen-bar-textures.py 从 exl/assets/*.png、exl/assets/menu/*.png 生成 —— 不要手改，不入库。",
         "",
         "#pragma once",
         "",
@@ -168,6 +195,7 @@ def selftest() -> int:
         (cap_widths(image) == (3, 3), "端头宽度识别"),
         ([p.width for p in slice_image(image).values()] == [3, MIDDLE_WIDTH, 3], "三段宽度"),
         (raw_rgba_bottom_up(image)[:len(row)] == image.rows[-1], "自下而上存行"),
+        (menu_blob_name(Path("menu/enemy_bars.png")) == "MENU_TEXT_ENEMY_BARS", "面板文字贴图命名"),
     ]
     failed = [message for ok, message in checks if not ok]
     for message in failed:

@@ -29,22 +29,19 @@ constexpr size_t FEATURE_COUNT = static_cast<size_t>(Feature::Count);
 
 struct FeatureInfo {
   uint64_t button;
-  const char* buttonName;
-  const char* label;  // 面板文字用英文：IMGUI 默认字体不保证有中文字形
-  const char* key;    // config.ini 里的键名
+  const char* key;  // config.ini 里的键名（面板上的中文文字是贴图，见 menu_textures.hpp）
 };
 
 constexpr FeatureInfo FEATURES[FEATURE_COUNT] = {
-    {BUTTON_UP, "Up", "Enemy HP bars", "enemy_bars"},
-    {BUTTON_RIGHT, "Right", "Boss bar", "boss_bar"},
-    {BUTTON_DOWN, "Down", "Damage numbers", "damage_numbers"},
-    {BUTTON_LEFT, "Left", "Map markers", "map_markers"},
+    {BUTTON_UP, "enemy_bars"},
+    {BUTTON_RIGHT, "boss_bar"},
+    {BUTTON_DOWN, "damage_numbers"},
+    {BUTTON_LEFT, "map_markers"},
 };
 
-constexpr const char* MENU_TITLE = "SSHUD  (hold R3 + D-pad)";
 constexpr const char* CONFIG_HEADER = "# sshud feature toggles: 1 = on, 0 = off (in game: hold R3 + D-pad)\n";
 constexpr size_t CONFIG_TEXT_CAPACITY = 512;
-constexpr size_t MENU_LINE_CAPACITY = 64;
+constexpr size_t CONFIG_LINE_CAPACITY = 64;
 
 inline const FeatureInfo& infoOf(Feature feature) { return FEATURES[static_cast<size_t>(feature)]; }
 
@@ -87,15 +84,6 @@ class MenuInput {
   uint64_t previous_ = 0;
 };
 
-/// 面板一行，如 "Up  Enemy HP bars: ON"；返回写入的长度
-inline size_t formatMenuLine(Feature feature, const Settings& settings, char* out, size_t capacity) {
-  const FeatureInfo& info = infoOf(feature);
-  const int written = std::snprintf(out, capacity, "%s  %s: %s", info.buttonName, info.label,
-                                    settings.isEnabled(feature) ? "ON" : "OFF");
-  if (written < 0 || capacity == 0) return 0;
-  return std::min(static_cast<size_t>(written), capacity - 1);
-}
-
 /// 序列化成 config.ini 文本；返回写入的长度
 inline size_t formatSettings(const Settings& settings, char* out, size_t capacity) {
   size_t length = 0;
@@ -105,7 +93,7 @@ inline size_t formatSettings(const Settings& settings, char* out, size_t capacit
   };
   append(CONFIG_HEADER);
   for (size_t i = 0; i < FEATURE_COUNT; ++i) {
-    char line[MENU_LINE_CAPACITY];
+    char line[CONFIG_LINE_CAPACITY];
     std::snprintf(line, sizeof(line), "%s=%d\n", FEATURES[i].key, settings.enabled[i] ? 1 : 0);
     append(line);
   }

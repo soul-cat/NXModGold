@@ -10,6 +10,7 @@
 
 #include "bar_textures.hpp"
 #include "hud_model.hpp"
+#include "menu_textures.hpp"
 #include "toggles_model.hpp"
 #include "unity_api.hpp"
 
@@ -29,6 +30,8 @@ constexpr ui::Color COLOR_TEXT_WHITE{1.0f, 1.0f, 1.0f, 1.0f};
 constexpr ui::Color COLOR_BOSS_FRAME{1.0f, 1.0f, 1.0f, 0.95f};
 constexpr ui::Color COLOR_DAMAGE{0xDC / 255.0f, 0x14 / 255.0f, 0x3C / 255.0f, 1.0f};
 constexpr ui::Color COLOR_MENU_BG{0.0f, 0.0f, 0.0f, 0.7f};
+constexpr ui::Color COLOR_MENU_ON{0.55f, 0.9f, 0.55f, 1.0f};
+constexpr ui::Color COLOR_MENU_OFF{0.6f, 0.6f, 0.6f, 1.0f};
 
 // ---------------------------------------------------------------- 字号（参考分辨率像素 / 世界单位）
 constexpr float BOSS_NAME_FONT = 28.0f;
@@ -45,11 +48,11 @@ constexpr float TEXT_BOX_WIDTH_FACTOR = 6.0f;  // 文字框宽度 = 字号 × �
 constexpr char16_t HEALTH_SEPARATOR = u'/';
 
 // 开关面板（按住 R3）：屏幕上方居中，参考分辨率像素
-constexpr float MENU_FONT = 26.0f;
 constexpr float MENU_TOP = 48.0f;
-constexpr float MENU_LINE_HEIGHT = 38.0f;
-constexpr float MENU_PADDING = 14.0f;
-constexpr float MENU_BOX_WIDTH = 480.0f;  // 足够放下最长一行 "Down  Damage numbers: OFF"
+constexpr float MENU_TEXT_HEIGHT = 34.0f;  // 文字贴图的绘制高度
+constexpr float MENU_LINE_HEIGHT = 42.0f;
+constexpr float MENU_PADDING = 16.0f;
+constexpr float MENU_STATE_GAP = 40.0f;    // 功能名与 开/关 之间的最小间距
 
 /// 保存并在析构时还原本模块会改动的 IMGUI 全局状态
 class ImguiStateGuard {
@@ -251,28 +254,55 @@ inline void drawEnemies(const Frame& frame, HudModel& model, const toggles::Sett
   }
 }
 
-/// 开关面板：半透明底框 + 标题 + 每个功能一行 ON/OFF
+/// 按统一高度画一张文字贴图，返回绘制宽度
+inline float drawTextImage(const TextImage& image, float x, float y, float height, ui::Color tint) {
+  const float width = image.width * height / MENU_TEXT_SOURCE_HEIGHT;
+  ui::setGuiColor(tint);
+  ui::drawTexture({x, y, width, height}, image.texture);
+  return width;
+}
+
+/// 面板内容宽度（参考分辨率像素）：标题与 "功能名 + 间距 + 开/关" 取最宽
+inline float menuContentWidth(const MenuTextures& textures) {
+  const float toReference = MENU_TEXT_HEIGHT / MENU_TEXT_SOURCE_HEIGHT;
+  float widest = textures.title.width * toReference;
+  const float stateWidth = std::max(textures.on.width, textures.off.width) * toReference;
+  for (const TextImage& row : textures.rows) {
+    widest = std::max(widest, row.width * toReference + MENU_STATE_GAP + stateWidth);
+  }
+  return widest;
+}
+
+/// 一行功能：功能名靠左（关闭时变灰），开/关 靠右
+inline void drawMenuRow(const MenuTextures& textures, size_t index, bool isEnabled, const Rect& line) {
+  const TextImage& state = isEnabled ? textures.on : textures.off;
+  const float stateWidth = state.width * line.height / MENU_TEXT_SOURCE_HEIGHT;
+  drawTextImage(textures.rows[index], line.x, line.y, line.height, isEnabled ? COLOR_TEXT_WHITE : COLOR_MENU_OFF);
+  drawTextImage(state, line.x + line.width - stateWidth, line.y, line.height, isEnabled ? COLOR_MENU_ON : COLOR_MENU_OFF);
+}
+
+/// 开关面板：半透明底框 + 标题 + 每个功能一行（中文文字是预渲染贴图）
 inline void drawMenu(const Frame& frame, const toggles::Settings& settings, bool isMenuOpen) {
   if (!isMenuOpen) return;
+  const MenuTextures* textures = menuTextures();
+  if (textures == nullptr) return;
   const float scale = uiScale(frame.width, frame.height);
+  const float padding = MENU_PADDING * scale;
   const float lineHeight = MENU_LINE_HEIGHT * scale;
-  const float boxWidth = MENU_BOX_WIDTH * scale;
-  const float boxX = (frame.width - boxWidth) * 0.5f;
-  const float textTop = (MENU_TOP + MENU_PADDING) * scale;
+  const float contentWidth = menuContentWidth(*textures) * scale;
+  const float boxX = (frame.width - contentWidth) * 0.5f - padding;
   const float lineCount = static_cast<float>(toggles::FEATURE_COUNT + 1);  // 标题 + 每个功能一行
   ui::setGuiColor(COLOR_MENU_BG);
-  ui::drawTexture({boxX, MENU_TOP * scale, boxWidth, lineHeight * lineCount + 2.0f * MENU_PADDING * scale},
+  ui::drawTexture({boxX, MENU_TOP * scale, contentWidth + 2.0f * padding, lineHeight * lineCount + 2.0f * padding},
                   frame.white);
-  ui::setGuiColor(COLOR_TEXT_WHITE);
-  ui::setStyleFontSize(frame.style, static_cast<int32_t>(std::max(1.0f, std::round(MENU_FONT * scale))));
-  ui::setGuiContentColor(COLOR_TEXT_WHITE);
-  ui::label({boxX, textTop, boxWidth, lineHeight}, ui::asciiString(toggles::MENU_TITLE), frame.style);
-  char line[toggles::MENU_LINE_CAPACITY];
+  Rect line{boxX + padding, MENU_TOP * scale + padding + (lineHeight - MENU_TEXT_HEIGHT * scale) * 0.5f, contentWidth,
+            MENU_TEXT_HEIGHT * scale};
+  drawTextImage(textures->title, line.x, line.y, line.height, COLOR_TEXT_WHITE);
   for (size_t i = 0; i < toggles::FEATURE_COUNT; ++i) {
-    toggles::formatMenuLine(static_cast<toggles::Feature>(i), settings, line, sizeof(line));
-    const float lineTop = textTop + lineHeight * static_cast<float>(i + 1);
-    ui::label({boxX, lineTop, boxWidth, lineHeight}, ui::asciiString(line), frame.style);
+    line.y += lineHeight;
+    drawMenuRow(*textures, i, settings.enabled[i], line);
   }
+  ui::setGuiColor(COLOR_TEXT_WHITE);
 }
 
 /// OnGUI 入口：每个 IMGUI 事件都会调用，只在 Repaint 时画

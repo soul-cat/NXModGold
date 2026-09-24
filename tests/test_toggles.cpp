@@ -125,38 +125,6 @@ static void testSettingsDefaultsAndFlip() {
   CHECK(isSameSettings(before, settings));
 }
 
-// ---------------------------------------------------------------- formatMenuLine
-
-static void testFormatMenuLine() {
-  std::printf("test: 面板行文字精确匹配\n");
-  Settings settings;
-  settings.flip(Feature::MapMarkers);
-  char line[MENU_LINE_CAPACITY];
-  size_t length = formatMenuLine(Feature::EnemyBars, settings, line, sizeof(line));
-  CHECK(std::strcmp(line, "Up  Enemy HP bars: ON") == 0);
-  CHECK(length == std::strlen("Up  Enemy HP bars: ON"));
-  length = formatMenuLine(Feature::MapMarkers, settings, line, sizeof(line));
-  CHECK(std::strcmp(line, "Left  Map markers: OFF") == 0);
-  CHECK(length == std::strlen(line));
-  formatMenuLine(Feature::BossBar, settings, line, sizeof(line));
-  CHECK(std::strcmp(line, "Right  Boss bar: ON") == 0);
-  formatMenuLine(Feature::DamageNumbers, settings, line, sizeof(line));
-  CHECK(std::strcmp(line, "Down  Damage numbers: ON") == 0);
-}
-
-static void testFormatMenuLineTruncates() {
-  std::printf("test: 容量太小时截断，返回 capacity-1 且以 NUL 结尾\n");
-  Settings settings;
-  constexpr size_t TINY_CAPACITY = 5;
-  char line[TINY_CAPACITY + 1];
-  std::memset(line, 'X', sizeof(line));
-  const size_t length = formatMenuLine(Feature::EnemyBars, settings, line, TINY_CAPACITY);
-  CHECK(length == TINY_CAPACITY - 1);
-  CHECK(line[TINY_CAPACITY - 1] == '\0');
-  CHECK(std::strcmp(line, "Up  ") == 0);
-  CHECK(line[TINY_CAPACITY] == 'X');  // 不越界写
-}
-
 // ---------------------------------------------------------------- formatSettings / parseSettings
 
 static void testFormatSettingsDefaults() {
@@ -283,8 +251,6 @@ int main() {
   testMenuClosedEdge();
   testMenuReleaseWithoutOpen();
   testSettingsDefaultsAndFlip();
-  testFormatMenuLine();
-  testFormatMenuLineTruncates();
   testFormatSettingsDefaults();
   testFormatSettingsTruncates();
   testSettingsRoundTrip();

@@ -45,10 +45,10 @@ all: subsdk
 subsdk: check stage
 	@$(MAKE) --no-print-directory -C $(STAGE) REPO_ROOT=$(REPO_ROOT)
 
-# BOSS 条贴图（assets/*.png → program/bar_textures.gen.h，生成物不入库）
+# BOSS 条与面板文字贴图（assets/*.png、assets/menu/*.png → program/bar_textures.gen.h，生成物不入库）
 TEXTURES_HEADER := $(CURDIR)/program/bar_textures.gen.h
 textures: $(TEXTURES_HEADER)
-$(TEXTURES_HEADER): $(wildcard $(CURDIR)/assets/*.png) $(REPO_ROOT)/tools/60-gen-bar-textures.py
+$(TEXTURES_HEADER): $(wildcard $(CURDIR)/assets/*.png) $(wildcard $(CURDIR)/assets/menu/*.png) $(REPO_ROOT)/tools/60-gen-bar-textures.py
 	@$(REPO_ROOT)/tools/60-gen-bar-textures.py
 
 check:
