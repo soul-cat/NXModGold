@@ -120,11 +120,22 @@ trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路�
 | `make -C exl` 编译 subsdk9（M1 Pro，GCC 16.1） | ✅（桩 offsets.h 验证，产物已删） |
 | hook 回调原样转发 x0/x1/x2 | ✅ 反汇编确认 |
 | `tools/40-patch-npdm.py` 补 SVC | ✅ 自检：与 npdmtool 逐字节一致、幂等、子段后移 |
-| 用游戏原版 npdm 组装 deploy/ | ❓ 需要 `work/dump/ExeFS/main.npdm`（05 脚本现在会拷） |
-| Ryujinx 里 hook 触发、日志里 hp/initHp 数值合理 | ❓ 待模拟器 |
+| 用游戏原版 npdm 组装 deploy/ | ✅ 原版缺的正是那 4 个 SVC |
+| Ryujinx 加载、Build ID 匹配、TakeDamage hook 安装、游戏继续运行 | ✅ 2026-09-24 日志确认 |
+| 打怪时 hit 日志、hp/initHp 数值合理 | ❓ 需要进游戏操作 |
 | 绘制 | 未做（本版只打日志） |
 
 要点：
+- **SDK 20+ 的 rtld 与 exlaunch 模块头不兼容**（实机同样会崩）：rtld 只把首字为
+  `0`/`0xEA000000`/`0x14000002` 的模块当旧式头，否则把 +8 处的字当扩展头偏移。
+  exlaunch 首字是 `b entrypoint`(0x14000008)，+8 是 nop(0xD503201F)，rtld 读到
+  `模块基址+0xD503201F` 直接非法访问。`exl/patches/rtld-sdk20-header.patch`
+  把首字改成 `b +8`、在 +8 放 `b entrypoint`，构建时自动打到 stage 上。
+- **Ryujinx 必须用 `memory_manager_mode: SoftwarePageTable`**：HostMapped /
+  HostMappedUnsafe 下 `svcMapProcessMemory` 不是真别名，exlaunch 的
+  `RwPages` 断言 `memcmp(m_Ro, m_Rw)==0` 失败、不装 hook。实机无此问题。
+- **Ryujinx 必须关 Hypervisor**（`use_hypervisor: false`）：Unity GC 跨线程
+  `svcGetThreadContext3` 在 Apple Hypervisor 上返回 BadArgument 直接崩（与 mod 无关）。
 - **main.npdm 必须基于游戏原版**：exlaunch 要 svcMapProcessMemory 等 4 个
   零售游戏没有的 SVC。`40-patch-npdm.py` 只改 ACID/ACI0 的 KAC，其余原样；
   不要用 exlaunch 模板 json 生成（那是别的游戏的栈大小/服务表）。
