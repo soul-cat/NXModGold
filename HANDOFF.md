@@ -144,6 +144,29 @@ trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路�
 
 ---
 
+## ⚠️ 转储结果不可信（2026-09-24 在 M1 上重跑流水线时发现）
+
+`20-dump-il2cpp.sh` 产出的 dump.cs **名字对、地址和类型全错**，由此生成的
+`offsets.h` 不能用。实机上 hook 的 `HM_TAKEDAMAGE = 0x236BEC0`
+（从 `plugin/sshud.elf.full` 反汇编确认旧机也是这个值）**不是**
+`HealthManager.TakeDamage(HitInstance)`。
+
+证据（对 `work/main.bin` 反汇编）：
+- `0x236BEC0` 序言只保存 x0，第一个 `bl` 之前从未保存或使用 x1 —— 而
+  `TakeDamage(HitInstance)` 的 HitInstance 是大结构，必经 x1 传指针。
+- dump 标为 `set_EnemyType` 的 `0x2369280` 函数体只有 `ret`；
+  标为 `set_IsInvincible(bool)` 的 `0x23699E0` 是 `str #1, [x0,#56]`，不读 w1。
+- 字段偏移乱序且重复（`boxCollider 0x10`、`enemyDeathEffects 0x10`、`hp 0x24`…），
+  类型名也错（HealthManager 的基类被解析成 `InventoryMapManager`）。
+- 方法名与字段名本身是连贯的（来自 metadata），RVA 大体单调递增、落在同一区域，
+  但每个名字对应到了别的函数体 —— 典型的二进制侧结构（CodeGenModule /
+  MetadataRegistration）布局或 registration 地址不对。
+
+结论：`find-il2cpp-registrations.py` 给的地址（本版 `7A5A1D0`/`7BFB220`）或
+Il2CppDumper 对 Unity 6000.0 的 v31 二进制结构解读有误。**在修好之前，
+不要用任何 offsets.h 上机或进模拟器**（hook 错函数轻则无效，重则随机崩溃）。
+验证方法：任取几个简单 setter，反汇编必须是 `str w1, [x0, #off]; ret`。
+
 ## 卡在哪 / 实机调试进度（2026-09-24，等待下一轮实机验证）
 
 全流水线已打通：转储 → `offsets.h`（Build ID `FC9EA4CCC955D579`，v1.0.3）→
