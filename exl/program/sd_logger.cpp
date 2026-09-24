@@ -1,9 +1,11 @@
 #include "sd_logger.hpp"
+#include "setting.hpp"
 
 #include <lib/log/svc_logger.hpp>
 #include <lib/nx/result.h>
 #include <nn/fs.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -23,6 +25,7 @@ constexpr const char* LOG_DIR = "sd:/config/sshud";
 constexpr const char* LOG_PATH = "sd:/config/sshud/log.txt";
 constexpr size_t PENDING_CAPACITY = 16 * 1024;
 constexpr size_t FAILURE_LINE_SIZE = 128;
+constexpr size_t LINE_CAPACITY = exl::setting::LogBufferSize + 1;  // 最长一条日志 + 换行
 
 enum class State : uint8_t { Buffering, Writing, Failed };
 
@@ -36,8 +39,9 @@ int64_t s_offset = 0;
 void reportFailure(const char* step, Result rc) {
   s_state = State::Failed;
   char line[FAILURE_LINE_SIZE];
-  const int length = std::snprintf(line, sizeof(line), "[sshud] sd log disabled: %s failed (0x%x)", step, rc);
-  exl::log::SvcLogger{}.LogRaw(std::string_view{line, static_cast<size_t>(length)});
+  const int written = std::snprintf(line, sizeof(line), "[sshud] sd log disabled: %s failed (0x%x)", step, rc);
+  const size_t length = std::min(static_cast<size_t>(std::max(written, 0)), sizeof(line) - 1);
+  exl::log::SvcLogger{}.LogRaw(std::string_view{line, length});
 }
 
 /// 缓冲满了就丢弃后续行（只会在 start() 迟迟没被调用时发生）
@@ -59,6 +63,15 @@ bool writeBytes(const void* data, size_t size) {
   return true;
 }
 
+/// 一行一次 WriteFile（每次都 flush，实机上少一次 SD 写入就少一次卡顿风险）
+void writeLine(std::string_view text) {
+  char line[LINE_CAPACITY];
+  const size_t length = std::min(text.size(), LINE_CAPACITY - 1);
+  std::memcpy(line, text.data(), length);
+  line[length] = '\n';
+  writeBytes(line, length + 1);
+}
+
 /// 每次启动一份新日志；目录已存在时 CreateDirectory 报错，忽略即可
 Result openFreshLog() {
   nn::fs::CreateDirectory(CONFIG_DIR);
@@ -74,8 +87,8 @@ Result openFreshLog() {
 void SdLogger::LogRaw(std::string_view text) {
   if (s_state == State::Buffering) {
     bufferLine(text);
-  } else if (s_state == State::Writing && writeBytes(text.data(), text.size())) {
-    writeBytes("\n", 1);
+  } else if (s_state == State::Writing) {
+    writeLine(text);
   }
 }
 
