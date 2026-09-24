@@ -204,7 +204,14 @@ hook 若装上则 TakeDamage 触发（`SSHUD_HOOK_TAKEDAMAGE` 位 → HUD 有数
      ```
      必须用 devkitPro 的 `aarch64-none-elf-ar`：macOS 自带的 `ar` 读不出这个
      GNU 格式归档的成员（报 "not found in archive"）。
-4. 实机：Switch 1 + Atmosphère + SaltyNX 1.9.3 + nx-ovlloader/Tesla-Menu；
+4. 模拟器（`exl/` 用）：Ryujinx（Ryubing）1.3.3。2026-09-24 官方服务器
+   `git.ryujinx.app`/`update.ryujinx.app` 全球超时，GitHub 上只有无法验证的个人构建，
+   因此从源码自建：源码与 3 个 Ryujinx 自托管 nupkg 取自 cache.nixos.org，
+   以 nixpkgs `pkgs/by-name/ry/ryubing/{package.nix,deps.json}` 的哈希为信任锚逐一校验；
+   .NET 9 SDK / NuGet 缓存都装在 `vendor/` 内。产物
+   `vendor/ryubing-build/output_arm64/Ryujinx.app`（arm64，ad-hoc 签名）。
+   官方服务器恢复后优先用官方发布。
+5. 实机：Switch 1 + Atmosphère + SaltyNX 1.9.3 + nx-ovlloader/Tesla-Menu；
    主机上必须装 v1.0.3 更新档（Build ID 匹配）。**勿联网（封号）**。
 
 ```bash
