@@ -665,6 +665,13 @@
       "method": "OnEnter",
       "required": true,
       "_note": "BOSS 战开场显示大标题"
+    },
+    {
+      "name": "GM_ENABLEUNLOCKEDAREAS",
+      "class": "GameMap",
+      "method": "EnableUnlockedAreas",
+      "required": true,
+      "_note": "启用已买地图的区域；大地图里它在 SetupMapMarkers 之后才调"
     }
   ],
   "script": [

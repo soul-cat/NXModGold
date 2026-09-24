@@ -1,7 +1,9 @@
 // 地图收集物标记：没拿到就显示，拿到就隐藏（效果对齐游戏的跳蚤标记）。
 //
 // 做法照 Completionist Map（docs/tasks/research-collectible-map.md 4.1）：
-//   - 刷新点：GameMap.SetupMapMarkers 之后（开大地图 / 快速地图都会调）。
+//   - 刷新点：GameMap.SetupMapMarkers 与 GameMap.EnableUnlockedAreas 之后。大地图（WorldMap）先
+//     SetupMapMarkers 再 EnableUnlockedAreas，快速地图反过来；区域激活状态只有在后者之后才准，
+//     所以两处都刷新（实机日志：只挂前者时大地图 570 个全被判成"无区域地图"）。
 //   - 建标记：克隆玩家手动标记模板 mapMarkerTemplates[0] 到 markerParent 下，
 //     删掉 InvMarker / InvMarkerCollide（否则标记菜单会把它当玩家标记处理）和第 0 个子节点，
 //     换成游戏自带图标（map_icons.hpp）；图标没找到时退回按分类染色的圆点。
@@ -263,6 +265,15 @@ HOOK_DEFINE_TRAMPOLINE(SetupMapMarkersHook) {
     if (sshud::unity::isAlive(self)) sshud::map::refreshMarkers(self);
   }
 };
+
+// IL2CPP 签名：void (GameMap* self, Nullable<MapZone> setCurrent, const MethodInfo* method)
+//   Nullable<MapZone> = { bool hasValue; int32 value; } 共 8 字节，按值放在 x1，原样转发。
+HOOK_DEFINE_TRAMPOLINE(EnableUnlockedAreasHook) {
+  static void Callback(void* self, uint64_t setCurrent, const void* method) {
+    Orig(self, setCurrent, method);
+    if (sshud::unity::isAlive(self)) sshud::map::refreshMarkers(self);
+  }
+};
 #endif
 
 namespace sshud::map {
@@ -270,6 +281,7 @@ namespace sshud::map {
 inline void installHooks() {
 #if SSHUD_HAS_COLLECTIBLES
   SetupMapMarkersHook::InstallAtOffset(GM_SETUPMAPMARKERS);
+  EnableUnlockedAreasHook::InstallAtOffset(GM_ENABLEUNLOCKEDAREAS);
   Logging.Log("[sshud] map hooks installed: %zu collectibles", COLLECTIBLE_COUNT);
 #else
   Logging.Log("[sshud] map: collectibles.gen.h missing, map markers disabled");
