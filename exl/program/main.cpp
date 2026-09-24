@@ -14,11 +14,16 @@
 
 #include "lib.hpp"
 #include "offsets.h"
+#include "frame_probe.hpp"
+#include "unity_api.hpp"
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
+
+namespace unity = sshud::unity;
+namespace probe = sshud::probe;
 
 // ---------------------------------------------------------------------------
 // Build ID 校验
@@ -97,9 +102,25 @@ void logHit(const void* self, const void* hit) {
               damage, isHeroDamage ? 1 : 0);
 }
 
+/// 探测：从原生代码调 Unity，把受击敌人的世界坐标换算成屏幕像素坐标。
+void logScreenPosition(const void* self) {
+  if (self == nullptr) return;
+  void* camera = unity::mainCamera();
+  if (camera == nullptr) {
+    Logging.Log("[sshud] pos: Camera.main is null");
+    return;
+  }
+  const unity::Vector3 world = unity::worldPositionOf(self);
+  const unity::Vector3 screen = unity::worldToScreen(camera, world);
+  Logging.Log("[sshud] pos world (%.2f, %.2f, %.2f) screen (%.1f, %.1f, z=%.2f) cam %dx%d", world.x,
+              world.y, world.z, screen.x, screen.y, screen.z, unity::pixelWidth(camera),
+              unity::pixelHeight(camera));
+}
+
 HOOK_DEFINE_TRAMPOLINE(TakeDamageHook) {
   static void Callback(void* self, void* hit, const void* method) {
     logHit(self, hit);
+    logScreenPosition(self);
     Orig(self, hit, method);
   }
 };
@@ -118,6 +139,7 @@ extern "C" void exl_main(void* x0, void* x1) {
 
   TakeDamageHook::InstallAtOffset(HM_TAKEDAMAGE);
   Logging.Log("[sshud] TakeDamage hook installed @ main+0x%lx", static_cast<unsigned long>(HM_TAKEDAMAGE));
+  probe::installFrameProbes();
 }
 
 extern "C" NORETURN void exl_exception_entry() {
