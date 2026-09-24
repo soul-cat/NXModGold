@@ -137,7 +137,7 @@ for f in "${INPUTS[@]}"; do
     if [ -n "$cert" ]; then tk_view+=(--cert "$cert"); fi
     tkinfo="$("$NSTOOL" -k "$KEYS" ${tk_view[@]+"${tk_view[@]}"} "$tik" 2>/dev/null)"
     tkey="$(printf '%s\n' "$tkinfo" | awk '/Title Key/{f=1} f && /Data:/{getline; gsub(/ /,""); print tolower($0); exit}')"
-    tgen="$(printf '%s\n' "$tkinfo" | grep -m1 'Key Generation:' | grep -o '[0-9]\+' | head -1)"
+    tgen="$(printf '%s\n' "$tkinfo" | grep -m1 -E 'Key ?Generation:' | grep -o '[0-9]\+' | head -1)"
     if [ -n "$tkey" ] && [ -n "$tgen" ]; then
       rid="$(basename "$tik" .tik | tr '[:lower:]' '[:upper:]')"
       TK_LINES+=("$rid:$tkey:$tgen")
