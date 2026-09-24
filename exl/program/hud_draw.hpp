@@ -37,11 +37,6 @@ constexpr float TEXT_BOX_WIDTH_FACTOR = 6.0f;  // 文字框宽度 = 字号 × �
 
 constexpr char16_t HEALTH_SEPARATOR = u'/';
 
-// 调试标记：左上角画一个小方块，证明 IMGUI 绘制已经上屏（不依赖打怪）
-constexpr bool SHOW_DEBUG_MARKER = true;
-constexpr float DEBUG_MARKER_SIZE = 12.0f;
-constexpr float DEBUG_MARKER_MARGIN = 8.0f;
-
 // 开关提示：屏幕上方居中，参考分辨率像素
 constexpr float TOAST_FONT = 26.0f;
 constexpr float TOAST_TOP = 48.0f;
@@ -244,10 +239,6 @@ inline void drawHud(HudModel& model, const toggles::Toggles& toggles) {
   const Frame frame = beginFrame(guard.style());
   drawToast(frame, toggles);
   if (!toggles.isHudEnabled) return;
-  if (SHOW_DEBUG_MARKER) {
-    ui::setGuiColor(COLOR_DAMAGE);
-    ui::drawTexture({DEBUG_MARKER_MARGIN, DEBUG_MARKER_MARGIN, DEBUG_MARKER_SIZE, DEBUG_MARKER_SIZE}, frame.white);
-  }
   model.expire(frame.now);
   drawEnemies(frame, model);
   if (frame.camera == nullptr) return;
