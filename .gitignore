@@ -63,6 +63,7 @@ exl/deploy/
 plugin/*.elf
 plugin/*.map
 plugin/source/offsets.h
+exl/program/collectibles.gen.h
 tests/test_layout
 tests/test_hud_model
 
