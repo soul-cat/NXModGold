@@ -144,28 +144,26 @@ trampoline（HANDOFF 下文"trampoline 池没有先例"那条风险在这条路�
 
 ---
 
-## ⚠️ 转储结果不可信（2026-09-24 在 M1 上重跑流水线时发现）
+## ✅ 已修复：旧转储用的是 v1.0.0 的 metadata（2026-09-24）
 
-`20-dump-il2cpp.sh` 产出的 dump.cs **名字对、地址和类型全错**，由此生成的
-`offsets.h` 不能用。实机上 hook 的 `HM_TAKEDAMAGE = 0x236BEC0`
-（从 `plugin/sshud.elf.full` 反汇编确认旧机也是这个值）**不是**
-`HealthManager.TakeDamage(HitInstance)`。
+**根因**：`tools/ncaext` 把 LibHac 的 `OpenFileSystemWithPatch` 调反了——
+写成 `updN.OpenFileSystemWithPatch(baseN)`，等于把基础版当补丁盖在更新档上，
+解出的 RomFS 是**基础版**内容。于是 `global-metadata.dat` 是 v1.0.0 的
+（16,261,740 字节），而 `main` 是 v1.0.3 的：名字全对、方法 token 与
+方法指针表错位，所有 RVA/字段偏移都指到别的东西上。正确写法与 Ryujinx 一致：
+`baseN.OpenFileSystemWithPatch(updN)`（v1.0.3 metadata 为 17,153,796 字节）。
 
-证据（对 `work/main.bin` 反汇编）：
-- `0x236BEC0` 序言只保存 x0，第一个 `bl` 之前从未保存或使用 x1 —— 而
-  `TakeDamage(HitInstance)` 的 HitInstance 是大结构，必经 x1 传指针。
-- dump 标为 `set_EnemyType` 的 `0x2369280` 函数体只有 `ret`；
-  标为 `set_IsInvincible(bool)` 的 `0x23699E0` 是 `str #1, [x0,#56]`，不读 w1。
-- 字段偏移乱序且重复（`boxCollider 0x10`、`enemyDeathEffects 0x10`、`hp 0x24`…），
-  类型名也错（HealthManager 的基类被解析成 `InventoryMapManager`）。
-- 方法名与字段名本身是连贯的（来自 metadata），RVA 大体单调递增、落在同一区域，
-  但每个名字对应到了别的函数体 —— 典型的二进制侧结构（CodeGenModule /
-  MetadataRegistration）布局或 registration 地址不对。
+**影响**：此前所有 `offsets.h` 都是错的。实机插件 hook 的 `0x236BEC0` 不是
+TakeDamage（正确值 `0x23A3040`）；版本库里的 `plugin/sshud.elf.full` 也是用错偏移编的。
 
-结论：`find-il2cpp-registrations.py` 给的地址（本版 `7A5A1D0`/`7BFB220`）或
-Il2CppDumper 对 Unity 6000.0 的 v31 二进制结构解读有误。**在修好之前，
-不要用任何 offsets.h 上机或进模拟器**（hook 错函数轻则无效，重则随机崩溃）。
-验证方法：任取几个简单 setter，反汇编必须是 `str w1, [x0, #off]; ret`。
+**修复后的独立验证**（反汇编 `work/main.bin`，不依赖 dump 自身）：
+- `set_EnemyType` = `str w1, [x0,#0xB8]`，dump 字段 `enemyType 0xB8` ✅
+- `get/set_IsInvincible` = `ldrb/strb [x0,#0x168]`，dump 字段 `invincible 0x168` ✅
+- `TakeDamage@0x23A3040` 保存 x1（`mov x20, x1`），读写 `[x20,#0x44]`（DamageDealt）
+  与 `[x19,#0xA8]`（hp）；`Hit@0x23A1D50` 内 `bl 0x23a3040` ✅
+- `20-dump-il2cpp.sh` 的四个关键签名全部命中，方法数 249,313
+
+**以后每次重新生成偏移都要做同样的 setter 反汇编抽查**——名字对不代表地址对。
 
 ## 卡在哪 / 实机调试进度（2026-09-24，等待下一轮实机验证）
 
