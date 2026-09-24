@@ -16,6 +16,23 @@ BepInEx 5 + Harmony，纯 Unity 托管代码：
 
 它只在玩家真正造成伤害后才建 UI，不扫描场景。
 
+### PC 的 BOSS 血条（用户点名要的效果，默认值来自 `Plugin.cs`）
+
+| 项 | 默认 |
+|---|---|
+| 触发 | 初始最大血量 > `HealthThreshold` 105 |
+| 画布 | `ScreenSpaceOverlay`，`CanvasScaler` 参考分辨率 1920×1080，`sortingOrder 100` |
+| 位置 | 屏幕**底部居中**（`BottomPosition=true`），距边 42；多个 BOSS 向上堆叠，间距 = 高 + 54 |
+| 尺寸 | 900 × 25 |
+| 颜色 | 填充 `#BEB8B8`（浅灰），背景 `#00000080`（半透明黑），填充内缩 2 px |
+| 形状 | 默认矩形；可选圆角（半径 30） |
+| 名称 | 条上方，字号 28，取 `EnemyDeathEffects.journalRecord.DisplayName`（猎人日志里的**本地化名字**），退化为 GameObject 名 |
+| 数值 | `当前/最大`，字号 24，居中在条上 |
+| 字体 | 游戏自带字体（`DamageTextManager.LoadFont`），所以和游戏 UI 风格一致 |
+
+Switch 上的对应：屏幕固定，不需要世界坐标跟随，最适合作为第一个上屏的效果。
+名称要多 hook/调用 `EnemyDeathEffects` → `journalRecord` → `DisplayName`。
+
 ## Switch（IL2CPP）上能用的同名 API（v1.0.3 dump 核对）
 
 - uGUI：`Canvas`/`CanvasScaler`/`UnityEngine.UI.Image`/`UnityEngine.UI.Text`、TMP 都在
@@ -41,7 +58,8 @@ BepInEx 5 + Harmony，纯 Unity 托管代码：
 |---|---|---|
 | 1 | 探针：候选每帧回调计数 + 受击时原生调 Unity 算屏幕坐标 | 日志：哪个回调每帧触发；`pos ... screen (x, y)` 落在 `cam WxH` 范围内 |
 | 2 | 在选定回调里画一个固定位置的矩形 | 游戏画面左上角出现色块 |
-| 3 | 接入 tracker，屏幕固定血条 + 数值 | 打怪后血条随 hp 变化，4 秒淡出 |
+| 3 | **BOSS 血条**（照 PC 默认样式：底部居中 900×25、名称、`当前/最大`） | 打 BOSS 时底部出现血条，数值随 hp 变化 |
+| 3b | 普通敌人屏幕固定血条 + 数值 | 打怪后血条随 hp 变化，淡出 |
 | 4 | 世界坐标跟随 | 血条跟在怪物头顶 |
 | 5 | 伤害数字飘字 | 每次命中飘出伤害值 |
 
