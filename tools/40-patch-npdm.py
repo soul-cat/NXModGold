@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""给游戏原版 main.npdm 追加 exlaunch 运行所需的 SVC 权限。
+"""给游戏原版 main.npdm 追加 exlaunch 运行所需的 SVC 权限与 SD 卡访问权限。
 
 exlaunch 以 subsdk9 形式注入时，要靠 svcMapProcessMemory 给 .text 建 RW 别名
 来写 hook，还要用 svcCreateSession/svcReplyAndReceive 拿到本进程句柄。
@@ -8,7 +8,9 @@ exlaunch 以 subsdk9 形式注入时，要靠 svcMapProcessMemory 给 .text 建 
 为什么不用 exlaunch 自带的 application.json 生成：那是【别的游戏】的 npdm，
 主线程栈大小、system_resource_size、服务列表都未必与 Silksong 一致，
 用错了游戏可能起不来。这里只在原版 npdm 上做最小改动：
-ACID 与 ACI0 的内核能力（KAC）里补上缺的 SVC 位，其余字节原样保留。
+ACID 与 ACI0 的内核能力（KAC）里补上缺的 SVC 位；文件系统权限（FAC/FAH）放开到全部，
+好让插件用 nn::fs::MountSdCardForDebug 往 SD 卡写日志（游戏原版只有 Debug 位 bit62，
+零售机上不够挂 SD）。其余字节原样保留。
 
 用法:
     ./tools/40-patch-npdm.py patch --in work/dump/ExeFS/main.npdm --out exl/deploy/exefs/main.npdm
@@ -62,6 +64,9 @@ ACID_TABLE_OFFSET = 0x220
 ACI0_TABLE_OFFSET = 0x20
 ACID_SIZE_FIELD = 0x204
 KAC_INDEX = 2  # 子段顺序：FAC/FAH, SAC, KAC
+FS_INDEX = 0
+FS_PERMISSIONS_OFFSET = 4  # FAC 与 FAH 都是 u8 version + 3 字节后跟 u64 权限位
+FS_PERMISSIONS_FULL = 0xFFFFFFFFFFFFFFFF
 
 
 def align_up(value: int, alignment: int) -> int:
@@ -131,6 +136,16 @@ class Container:
     def caps(self) -> list[int]:
         offset, size = self.sections()[KAC_INDEX]
         return list(struct.unpack_from(f"<{size // 4}I", self.blob, offset))
+
+    def fs_permissions(self) -> int:
+        offset, _ = self.sections()[FS_INDEX]
+        return struct.unpack_from("<Q", self.blob, offset + FS_PERMISSIONS_OFFSET)[0]
+
+    def with_fs_permissions(self, permissions: int) -> Container:
+        offset, _ = self.sections()[FS_INDEX]
+        blob = bytearray(self.blob)
+        struct.pack_into("<Q", blob, offset + FS_PERMISSIONS_OFFSET, permissions)
+        return Container(bytes(blob), self.table_offset)
 
     def with_caps(self, caps: list[int]) -> Container:
         """替换 KAC。位于 KAC 之后的子段整体后移（保持 0x10 对齐）。"""
@@ -207,10 +222,11 @@ def patch_npdm(data: bytes, wanted: set[int]) -> tuple[bytes, set[int]]:
     """返回 (新 npdm, 实际新增的 SVC)。ACID 与 ACI0 同步补齐（loader 要求 ACI0 ⊆ ACID）。"""
     npdm = Npdm.parse(data)
     missing = (wanted - syscalls_of(npdm.aci0.caps())) | (wanted - syscalls_of(npdm.acid.caps()))
-    if not missing:
+    has_full_fs = FS_PERMISSIONS_FULL == npdm.acid.fs_permissions() == npdm.aci0.fs_permissions()
+    if not missing and has_full_fs:
         return data, set()
-    npdm.acid = npdm.acid.with_caps(add_syscalls(npdm.acid.caps(), wanted))
-    npdm.aci0 = npdm.aci0.with_caps(add_syscalls(npdm.aci0.caps(), wanted))
+    npdm.acid = npdm.acid.with_caps(add_syscalls(npdm.acid.caps(), wanted)).with_fs_permissions(FS_PERMISSIONS_FULL)
+    npdm.aci0 = npdm.aci0.with_caps(add_syscalls(npdm.aci0.caps(), wanted)).with_fs_permissions(FS_PERMISSIONS_FULL)
     return npdm.serialize(), missing
 
 
@@ -240,6 +256,7 @@ def cmd_patch(args: argparse.Namespace) -> int:
     print(f"[✓] {out}（title {title_id:016X}，{len(data)} → {len(patched)} 字节）")
     for svc in sorted(added):
         print(f"    + {svc:#04x} {svc_name(svc)}")
+    print(f"    fs 权限 {Npdm.parse(data).aci0.fs_permissions():#018x} → {FS_PERMISSIONS_FULL:#018x}（SD 卡日志）")
     return 0
 
 
@@ -249,7 +266,8 @@ def cmd_show(args: argparse.Namespace) -> int:
     for name, container in (("ACID", npdm.acid), ("ACI0", npdm.aci0)):
         svcs = syscalls_of(container.caps())
         lacking = sorted(set(REQUIRED_SVCS) - svcs)
-        print(f"{name}     : {len(svcs)} 个 SVC；exlaunch 缺 {[svc_name(s) for s in lacking] or '无'}")
+        print(f"{name}     : {len(svcs)} 个 SVC；exlaunch 缺 {[svc_name(s) for s in lacking] or '无'}；"
+              f"fs 权限 {container.fs_permissions():#018x}")
     return 0
 
 
@@ -285,6 +303,7 @@ def check_against_npdmtool(template: dict, workdir: Path) -> None:
     expected_spec = json.loads(json.dumps(template))
     syscalls = next(c for c in expected_spec["kernel_capabilities"] if c["type"] == "syscalls")
     syscalls["value"].update({name: f"{svc:#04x}" for svc, name in REQUIRED_SVCS.items()})
+    expected_spec["filesystem_access"]["permissions"] = f"{FS_PERMISSIONS_FULL:#018x}"
     expected = build_with_npdmtool(expected_spec, workdir, "expected")
 
     patched, added = patch_npdm(base, set(REQUIRED_SVCS))
@@ -292,7 +311,7 @@ def check_against_npdmtool(template: dict, workdir: Path) -> None:
     expect(patched == expected, "补丁结果与 npdmtool 输出不一致")
     again, added_again = patch_npdm(patched, set(REQUIRED_SVCS))
     expect(again == patched and not added_again, "补丁不是幂等的")
-    print(f"  ✓ npdmtool 对照：补 {len(added)} 个 SVC，{len(base)} → {len(patched)} 字节，逐字节一致；幂等")
+    print(f"  ✓ npdmtool 对照：补 {len(added)} 个 SVC + 全部 fs 权限，{len(base)} → {len(patched)} 字节，逐字节一致；幂等")
 
 
 def check_section_shift() -> None:
