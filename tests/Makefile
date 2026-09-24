@@ -4,7 +4,7 @@ CXXFLAGS ?= -std=c++17 -O1 -g -Wall -Wextra
 SANFLAGS ?= -fsanitize=address,undefined
 TSANFLAGS?= -fsanitize=thread
 
-BINS = test_tracker test_seqlock test_reloc test_hookplan test_layout
+BINS = test_tracker test_seqlock test_reloc test_hookplan test_layout test_hud_model
 
 .PHONY: all test tsan clean
 all: $(BINS)
@@ -23,6 +23,9 @@ test_hookplan: test_hookplan.cpp ../plugin/source/hook_pool.hpp ../plugin/source
 
 test_layout: test_layout.cpp ../overlay/source/hud_layout.hpp ../overlay/source/hud_reader.hpp
 	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_layout.cpp
+
+test_hud_model: test_hud_model.cpp ../exl/program/hud_model.hpp
+	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_hud_model.cpp
 
 test: $(BINS)
 	@for b in $(BINS); do echo "--- $$b ---"; ./$$b || exit 1; done

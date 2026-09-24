@@ -64,6 +64,7 @@ plugin/*.elf
 plugin/*.map
 plugin/source/offsets.h
 tests/test_layout
+tests/test_hud_model
 
 # --- C# 工具产物 ---
 bin/

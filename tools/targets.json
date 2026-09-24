@@ -76,6 +76,26 @@
       "namespace": "UnityEngine",
       "required": false,
       "_note": "指向原生 UnityEngine::Object。v2 取世界坐标时会用到"
+    },
+    {
+      "name": "HM_DEATHEFFECTS",
+      "class": "HealthManager",
+      "field": "enemyDeathEffects",
+      "required": true,
+      "_note": "BOSS 名称链路起点：→ EnemyDeathEffects"
+    },
+    {
+      "name": "EDE_JOURNALRECORD",
+      "class": "EnemyDeathEffects",
+      "field": "journalRecord",
+      "required": true
+    },
+    {
+      "name": "EJR_DISPLAYNAME",
+      "class": "EnemyJournalRecord",
+      "field": "displayName",
+      "required": true,
+      "_note": "LocalisedString 值类型字段（内联在对象里），对它调 ToString() 得本地化名"
     }
   ],
   "methods": [
@@ -155,29 +175,182 @@
       "name": "PMGUI_ONGUI",
       "class": "PlayMakerGUI",
       "method": "OnGUI",
-      "required": false,
-      "_note": "探测：候选的每帧 IMGUI 回调"
-    },
-    {
-      "name": "GUIDRAWER_ONGUI",
-      "class": "GUIDrawer",
-      "method": "OnGUI",
-      "required": false,
-      "_note": "探测：候选的每帧 IMGUI 回调"
+      "required": true,
+      "_note": "绘制入口：每帧 IMGUI 回调（get_Instance 保证对象存在）"
     },
     {
       "name": "CAMCTRL_LATEUPDATE",
       "class": "CameraController",
       "method": "LateUpdate",
-      "required": false,
-      "_note": "探测：候选的每帧主线程回调"
+      "required": true,
+      "_note": "每帧主线程回调：确保 PlayMakerGUI 存在（标题画面即触发，已实测）"
     },
     {
-      "name": "HERO_LATEUPDATE",
-      "class": "HeroController",
-      "method": "LateUpdate",
-      "required": false,
-      "_note": "探测：候选的每帧主线程回调"
+      "name": "PMGUI_GETINSTANCE",
+      "class": "PlayMakerGUI",
+      "method": "get_Instance",
+      "required": true,
+      "_note": "不存在时自建 GameObject + AddComponent<PlayMakerGUI>（反汇编确认）"
+    },
+    {
+      "name": "EVENT_GETCURRENT",
+      "class": "Event",
+      "method": "get_current",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "EVENT_GETTYPE",
+      "class": "Event",
+      "method": "get_type",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUI_DRAWTEXTURE",
+      "class": "GUI",
+      "method": "DrawTexture",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "DrawTexture(Rect position, Texture image)"
+    },
+    {
+      "name": "GUI_LABEL",
+      "class": "GUI",
+      "method": "Label",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "Label(Rect position, string text, GUIStyle style)"
+    },
+    {
+      "name": "GUI_GETCOLOR",
+      "class": "GUI",
+      "method": "get_color",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUI_SETCOLOR",
+      "class": "GUI",
+      "method": "set_color",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUI_GETCONTENTCOLOR",
+      "class": "GUI",
+      "method": "get_contentColor",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUI_SETCONTENTCOLOR",
+      "class": "GUI",
+      "method": "set_contentColor",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUI_GETSKIN",
+      "class": "GUI",
+      "method": "get_skin",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUISKIN_GETLABEL",
+      "class": "GUISkin",
+      "method": "get_label",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUISTYLE_GETFONTSIZE",
+      "class": "GUIStyle",
+      "method": "get_fontSize",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUISTYLE_SETFONTSIZE",
+      "class": "GUIStyle",
+      "method": "set_fontSize",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUISTYLE_GETALIGNMENT",
+      "class": "GUIStyle",
+      "method": "get_alignment",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUISTYLE_SETALIGNMENT",
+      "class": "GUIStyle",
+      "method": "set_alignment",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "TEX2D_GETWHITE",
+      "class": "Texture2D",
+      "method": "get_whiteTexture",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "SCREEN_GETWIDTH",
+      "class": "Screen",
+      "method": "get_width",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "SCREEN_GETHEIGHT",
+      "class": "Screen",
+      "method": "get_height",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "TIME_GETUNSCALEDTIME",
+      "class": "Time",
+      "method": "get_unscaledTime",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "INT32_TOSTRING",
+      "class": "Int32",
+      "method": "ToString",
+      "required": true,
+      "namespace": "System",
+      "signature_contains": "public override string ToString()"
+    },
+    {
+      "name": "STRING_CONCAT3",
+      "class": "String",
+      "method": "Concat",
+      "required": true,
+      "namespace": "System",
+      "signature_contains": "Concat(string str0, string str1, string str2)"
+    },
+    {
+      "name": "LS_TOSTRING",
+      "class": "LocalisedString",
+      "method": "ToString",
+      "required": true,
+      "signature_contains": "public override string ToString()"
+    },
+    {
+      "name": "CHAR_TOSTRING",
+      "class": "Char",
+      "namespace": "System",
+      "method": "ToString",
+      "signature_contains": "public override string ToString()",
+      "required": true,
+      "_note": "拼 \"hp/max\" 的分隔符：没有现成的托管字符串字面量可取，用 '/'.ToString() 生成"
     }
   ]
 }

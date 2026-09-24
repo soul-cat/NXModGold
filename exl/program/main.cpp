@@ -2,28 +2,23 @@
 //
 // 与 plugin/（SaltyNX 版）的区别：
 //   - 由游戏自己的 rtld 以 subsdk9 加载，不依赖 SaltyNX / Tesla，模拟器能跑。
-//   - hook 用 exlaunch 的 trampoline（svcMapProcessMemory 给 .text 建 RW 别名），
-//     不再需要自研的 trampoline 池 + SaltySD_Memcpy 那条没有先例的路。
-//   - 这一版只打日志（svcOutputDebugString，Ryujinx 控制台可见），先验证
-//     Build ID、hook 触发、字段偏移三件事，再接绘制。
+//   - hook 用 exlaunch 的 trampoline（svcMapProcessMemory 给 .text 建 RW 别名）。
+//   - 绘制在游戏进程内用 Unity IMGUI 完成（hud_hooks.hpp / hud_draw.hpp），
+//     日志走 svcOutputDebugString（Ryujinx 按 ASCII 解码，所以日志文本用英文）。
 //
 // 时机：rtld 在 main 的入口之前初始化 subsdk，所以 exl_main 跑的时候
-// IL2CPP 尚未初始化。hook 体只按固定偏移读字段，不碰 IL2CPP 运行时。
+// IL2CPP 尚未初始化 —— 这里只装 hook，所有 Unity 调用都发生在 hook 体里（主线程）。
 //
 // 地址约定与 plugin/ 相同：运行时地址 = main 模块基址 + RVA（offsets.h）。
 
 #include "lib.hpp"
 #include "offsets.h"
-#include "frame_probe.hpp"
-#include "unity_api.hpp"
+#include "hud_hooks.hpp"
 
 #include <cstdio>
 #include <cstring>
 
 namespace {
-
-namespace unity = sshud::unity;
-namespace probe = sshud::probe;
 
 // ---------------------------------------------------------------------------
 // Build ID 校验
@@ -77,54 +72,6 @@ bool verifyBuildId() {
   return isMatch;
 }
 
-// ---------------------------------------------------------------------------
-// hook：HealthManager::TakeDamage
-//
-// IL2CPP 编译后的签名：void (HealthManager* self, HitInstance* hit, const MethodInfo* method)
-//   - HitInstance 是大号值类型，AAPCS64 下经隐藏指针传递（x1）。
-//   - x2 是 IL2CPP 追加的 MethodInfo*，必须原样转发给原函数。
-// ---------------------------------------------------------------------------
-template <typename T>
-T readField(const void* base, uintptr_t offset) {
-  T value{};
-  std::memcpy(&value, static_cast<const uint8_t*>(base) + offset, sizeof(T));
-  return value;
-}
-
-/// 此刻原函数还没执行，读到的 hp 是扣血【之前】的值。
-void logHit(const void* self, const void* hit) {
-  if (self == nullptr || hit == nullptr) return;
-  const int32_t hp = readField<int32_t>(self, HM_HP);
-  const int32_t maxHp = readField<int32_t>(self, HM_INITHP);
-  const int32_t damage = readField<int32_t>(hit, HIT_DAMAGEDEALT);
-  const bool isHeroDamage = readField<bool>(hit, HIT_ISHERODAMAGE);
-  Logging.Log("[sshud] hit hm=%p hp %d -> %d / %d dmg %d hero=%d", self, hp, hp - damage, maxHp,
-              damage, isHeroDamage ? 1 : 0);
-}
-
-/// 探测：从原生代码调 Unity，把受击敌人的世界坐标换算成屏幕像素坐标。
-void logScreenPosition(const void* self) {
-  if (self == nullptr) return;
-  void* camera = unity::mainCamera();
-  if (camera == nullptr) {
-    Logging.Log("[sshud] pos: Camera.main is null");
-    return;
-  }
-  const unity::Vector3 world = unity::worldPositionOf(self);
-  const unity::Vector3 screen = unity::worldToScreen(camera, world);
-  Logging.Log("[sshud] pos world (%.2f, %.2f, %.2f) screen (%.1f, %.1f, z=%.2f) cam %dx%d", world.x,
-              world.y, world.z, screen.x, screen.y, screen.z, unity::pixelWidth(camera),
-              unity::pixelHeight(camera));
-}
-
-HOOK_DEFINE_TRAMPOLINE(TakeDamageHook) {
-  static void Callback(void* self, void* hit, const void* method) {
-    logHit(self, hit);
-    logScreenPosition(self);
-    Orig(self, hit, method);
-  }
-};
-
 }  // namespace
 
 extern "C" void exl_main(void* x0, void* x1) {
@@ -137,9 +84,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               mainModule.m_Text.m_Size);
   if (!verifyBuildId()) return;
 
-  TakeDamageHook::InstallAtOffset(HM_TAKEDAMAGE);
-  Logging.Log("[sshud] TakeDamage hook installed @ main+0x%lx", static_cast<unsigned long>(HM_TAKEDAMAGE));
-  probe::installFrameProbes();
+  sshud::hud::installHooks();
 }
 
 extern "C" NORETURN void exl_exception_entry() {
