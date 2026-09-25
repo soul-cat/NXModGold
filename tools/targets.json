@@ -162,6 +162,13 @@
       "field": "_activeHealthManagers",
       "required": true,
       "_note": "静态字段：场上激活的 HealthManager 列表（相对 static_fields）"
+    },
+    {
+      "name": "PD_MAPALLROOMS",
+      "class": "PlayerData",
+      "field": "mapAllRooms",
+      "required": false,
+      "_note": "public bool，调试用的全地图显示；地图金手指会把它写成 true 并存进存档"
     }
   ],
   "methods": [

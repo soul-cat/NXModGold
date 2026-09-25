@@ -27,6 +27,7 @@
 #include "map_markers_data.hpp"
 #include "map_strings.hpp"
 #include "map_refresh_log.hpp"
+#include "map_scene_cache.hpp"
 #include "toggles.hpp"
 
 #if __has_include("collectibles.gen.h")
@@ -46,51 +47,11 @@ constexpr int32_t PIN_STATE_NONE = 2;          // MapPin.PinVisibilityStates.Non
 constexpr float NO_MAP_POSITION = -1000.0f;    // GetMapPosition 在场景缺地图块时的返回值
 constexpr size_t MARKER_NAME_CAPACITY = 32;
 constexpr const char* FIRST_MARKER_NAME = "sshud_pin_0";
-constexpr int SCENE_CACHE_SIZE = 64;
 constexpr int MAX_ICON_ATTEMPTS = 5;         // 贴图可能要等相关界面载入过才找得到，开几次图后不再重试
 constexpr int MAX_LOGGED_MISSING_ICONS = 8;
 
 inline int32_t pinVisibilityState() { return call<int32_t>(MAPPIN_GETSTATE); }
 
-// ---------------------------------------------------------------- 场景 → 地图坐标
-struct SceneInfo {
-  const char* name = nullptr;
-  ui::ManagedObject scene = nullptr;     // GameMapScene
-  ui::ManagedObject sceneObj = nullptr;  // GameObject
-  Vector2 scenePos{};
-  bool isMapped = false;  // 游戏记为已绘制（scenesMapped）
-  bool isDrawn = false;   // 地图块在层级里激活：没买区域地图时游戏不激活，已绘制的房间也不画
-};
-
-inline SceneInfo querySceneInfo(ui::ManagedObject gameMap, const char* sceneName, ui::ManagedString name) {
-  const int32_t zone = call<int32_t>(GM_GETMAPZONEFROMSCENE, gameMap, name);
-  SceneInfo info;
-  info.name = sceneName;
-  call<void>(GM_GETSCENEINFO, gameMap, name, zone, &info.scene, &info.sceneObj, &info.scenePos);
-  info.isMapped = ui::isAlive(info.scene) && call<bool>(GMS_ISMAPPED, info.scene);
-  info.isDrawn = info.isMapped && call<bool>(GO_GETACTIVEINHIERARCHY, gameObjectOf(info.scene));
-  return info;
-}
-
-/// 一次刷新内的场景信息缓存（同一场景的多个收集物只查一次）
-class SceneCache {
- public:
-  const SceneInfo& get(ui::ManagedObject gameMap, const char* sceneName, ui::ManagedString sceneString) {
-    for (int i = 0; i < count_; ++i) {
-      if (std::strcmp(entries_[i].name, sceneName) == 0) return entries_[i];
-    }
-    SceneInfo& slot = entries_[next_];
-    slot = querySceneInfo(gameMap, sceneName, sceneString);
-    next_ = (next_ + 1) % SCENE_CACHE_SIZE;
-    count_ = count_ < SCENE_CACHE_SIZE ? count_ + 1 : count_;
-    return slot;
-  }
-
- private:
-  SceneInfo entries_[SCENE_CACHE_SIZE];
-  int count_ = 0;
-  int next_ = 0;
-};
 
 inline Vector2 mapPositionOf(ui::ManagedObject gameMap, const CollectibleEntry& entry, const SceneInfo& info) {
   if (!ui::isAlive(info.scene)) return {NO_MAP_POSITION, NO_MAP_POSITION};
@@ -125,36 +86,55 @@ inline ui::ManagedObject createMarker(ui::ManagedObject tpl, ui::ManagedObject p
 }
 
 // ---------------------------------------------------------------- 刷新
-inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, const CollectibleEntry& entry,
-                         const EntryStrings& strings, SceneCache& scenes, RefreshStats& stats) {
-  const SceneInfo& info = scenes.get(gameMap, entry.scene, strings.scene);
+/// 算地图坐标并挪过去；场景缺地图块时返回 false
+inline bool placeMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, const CollectibleEntry& entry,
+                        const SceneInfo& info) {
+  ScopedTicks timer(g_profile.position);
   const Vector2 pos = mapPositionOf(gameMap, entry, info);
-  bool isVisible = true;
-  if (pos.x <= NO_MAP_POSITION) {
+  if (pos.x <= NO_MAP_POSITION) return false;
+  ui::ManagedObject transform = transformOf(marker);
+  const ui::Vector3 current = call<ui::Vector3>(TR_GETLOCALPOSITION, transform);
+  call<void>(TR_SETLOCALPOSITION, transform, ui::Vector3{pos.x, pos.y, current.z});
+  return true;
+}
+
+inline bool isCollectedTimed(const CollectibleEntry& entry, const EntryStrings& strings) {
+  ScopedTicks timer(g_profile.collected);
+  return isCollected(entry, strings);
+}
+
+
+inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, const CollectibleEntry& entry,
+                         const EntryStrings& strings, const SceneInfo& info, RefreshStats& stats) {
+  bool isVisible = false;
+  if (!placeMarker(gameMap, marker, entry, info)) {
     ++stats.unplaceable;
-    isVisible = false;
+  } else if (!info.isMapped) {
+    ++stats.unmapped;
+  } else if (!info.isDrawn) {
+    ++stats.noAreaMap;
+  } else if (isCollectedTimed(entry, strings)) {
+    ++stats.collected;
   } else {
-    ui::ManagedObject transform = transformOf(marker);
-    const ui::Vector3 current = call<ui::Vector3>(TR_GETLOCALPOSITION, transform);
-    call<void>(TR_SETLOCALPOSITION, transform, ui::Vector3{pos.x, pos.y, current.z});
-    if (!info.isMapped) {
-      ++stats.unmapped;
-      isVisible = false;
-    } else if (!info.isDrawn) {
-      ++stats.noAreaMap;
-      isVisible = false;
-    } else if (isCollected(entry, strings)) {
-      ++stats.collected;
-      isVisible = false;
-    }
+    isVisible = true;
   }
-  setActive(marker, isVisible);
+  {
+    ScopedTicks timer(g_profile.activate);
+    setActive(marker, isVisible);
+  }
   stats.visible += isVisible ? 1 : 0;
   stats.visibleByKind[static_cast<size_t>(entry.kind)] += isVisible ? 1 : 0;
 }
 
 #if SSHUD_HAS_COLLECTIBLES
 constexpr size_t COLLECTIBLE_COUNT = sizeof(COLLECTIBLES) / sizeof(COLLECTIBLES[0]);
+
+template <size_t N>
+const SceneInfo& sceneInfoTimed(SceneCache<N>& scenes, size_t index, ui::ManagedObject gameMap,
+                                const EntryStrings& strings) {
+  ScopedTicks timer(g_profile.sceneQuery);
+  return scenes.get(index, gameMap, COLLECTIBLES[index].scene, strings.scene);
+}
 
 /// 我们的标记在 parent 下的起始下标；还没建过（或数量对不上）返回 -1
 inline int32_t firstMarkerIndex(ui::ManagedObject parent) {
@@ -225,6 +205,7 @@ inline void hideMarkers(ui::ManagedObject parent) {
 
 inline void refreshMarkers(ui::ManagedObject gameMap) {
   const uint64_t startTick = systemTick();
+  logMapAllRoomsChange();
   ui::ManagedObject parent = ui::readField<ui::ManagedObject>(gameMap, GM_MARKERPARENT);
   ui::ManagedObject tpl = markerTemplate(gameMap);
   if (!ui::isAlive(parent) || !ui::isAlive(tpl)) {
@@ -234,27 +215,38 @@ inline void refreshMarkers(ui::ManagedObject gameMap) {
   if (!toggles::g_settings.isEnabled(toggles::Feature::MapMarkers) || pinVisibilityState() == PIN_STATE_NONE) {
     return hideMarkers(parent);
   }
-  saveCurrentRoomState();
+  g_profile = RefreshProfile{};
+  {
+    ScopedTicks timer(g_profile.roomSave);
+    saveCurrentRoomState();
+  }
   const int32_t start = firstMarkerIndex(parent);
   if (start < 0) iconProgress() = IconProgress{};
   const bool wantsIcons = iconProgress().isPending();
   IconSet icons;  // 含托管指针，必须在栈上（GC 会扫栈）
   if (wantsIcons) loadPendingIcons(icons, gameMap, tpl);
   RefreshStats stats;
-  static SceneCache s_scenes;  // 大对象不放栈上；每次刷新重置（场景对象游戏自己持有，不怕 GC）
+  static SceneCache<COLLECTIBLE_COUNT> s_scenes;  // 跨刷新保留，见 map_scene_cache.hpp
   static PinnedEntryStrings<COLLECTIBLE_COUNT> s_strings;
-  s_scenes = SceneCache{};
+  s_scenes.beginRefresh(gameMap, start < 0);
   for (size_t i = 0; i < COLLECTIBLE_COUNT; ++i) {
-    ui::ManagedObject marker = start >= 0 ? gameObjectOf(childAt(parent, start + static_cast<int32_t>(i)))
-                                          : createMarker(tpl, parent, i, COLLECTIBLES[i].kind);
+    ui::ManagedObject marker = nullptr;
+    {
+      ScopedTicks timer(g_profile.lookup);
+      marker = start >= 0 ? gameObjectOf(childAt(parent, start + static_cast<int32_t>(i)))
+                          : createMarker(tpl, parent, i, COLLECTIBLES[i].kind);
+    }
     if (marker == nullptr) continue;
     stats.created += start >= 0 ? 0 : 1;
     bool& hasIcon = iconProgress().hasIcon[i];
     if (wantsIcons && !hasIcon) hasIcon = applyIcon(marker, icons.resolve(COLLECTIBLES[i]));
     stats.iconless += hasIcon ? 0 : 1;
-    updateMarker(gameMap, marker, COLLECTIBLES[i], s_strings.get(i, COLLECTIBLES[i]), s_scenes, stats);
+    const EntryStrings& strings = s_strings.get(i, COLLECTIBLES[i]);
+    const SceneInfo& info = sceneInfoTimed(s_scenes, i, gameMap, strings);
+    updateMarker(gameMap, marker, COLLECTIBLES[i], strings, info, stats);
   }
   logRefresh(stats, elapsedMicros(startTick), COLLECTIBLE_COUNT);
+  logProfile();
   if (wantsIcons && stats.iconless > 0) logMissingIcons();
 }
 #endif
