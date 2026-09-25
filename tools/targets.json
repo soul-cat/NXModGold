@@ -665,6 +665,34 @@
       "required": true
     },
     {
+      "name": "TIM_GETTOOLBYNAME",
+      "class": "ToolItemManager",
+      "method": "GetToolByName",
+      "required": true,
+      "_note": "静态，ToolItem (string name, MethodInfo*)；找不到或管理器不在返回 null；元数据与类初始化都在被调方内（反汇编核实）"
+    },
+    {
+      "name": "TOOL_GETISUNLOCKED",
+      "class": "ToolItem",
+      "method": "get_IsUnlocked",
+      "required": true,
+      "_note": "地图工具标记的物品判定：拾取工具多数不留场景持久布尔"
+    },
+    {
+      "name": "CRM_GETRELIC",
+      "class": "CollectableRelicManager",
+      "method": "GetRelic",
+      "required": true,
+      "_note": "静态，CollectableRelic (string relicName, MethodInfo*)；找不到返回 null。注意：不判 SilentInstance 是否为 null，只能在游戏内调用"
+    },
+    {
+      "name": "CRM_GETRELICDATA",
+      "class": "CollectableRelicManager",
+      "method": "GetRelicData",
+      "required": true,
+      "_note": "静态，返回 3 字节 struct CollectableRelicsData.Data {IsCollected, IsDeposited, HasSeenInRelicBoard} 按值在 w0（get_IsInInventory 调用点 and w0,#0x101 核实）"
+    },
+    {
       "name": "GO_GETACTIVEINHIERARCHY",
       "class": "GameObject",
       "namespace": "UnityEngine",

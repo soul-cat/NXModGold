@@ -47,6 +47,13 @@ enum class CheckKind : uint8_t {
   PlayerDataBool,        // PlayerData 在 playerDataOffset 处的 bool == true
 };
 
+/// 主判定没过时再查的物品状态（Completionist 判定第 3 步）：工具 / 遗物拾取后多数不留场景持久布尔
+enum class ItemCheck : uint8_t {
+  None,
+  ToolUnlocked,    // ToolItemManager.GetToolByName(itemName).IsUnlocked
+  RelicCollected,  // CollectableRelicManager.GetRelicData(GetRelic(itemName)).IsCollected
+};
+
 /// 图标从哪来（照 Completionist Map 的 MapStyles：全用游戏自带贴图）
 enum class IconSource : uint8_t {
   SpriteName,       // Resources.FindObjectsOfTypeAll(Sprite) 里按贴图名找（iconName）
@@ -69,6 +76,8 @@ struct CollectibleEntry {
   IconSource iconSource;
   const char* iconName;       // SpriteName / CollectableItem 用
   float iconScale;            // 标记的 localScale
+  ItemCheck itemCheck;
+  const char* itemName;       // ItemCheck 用：ToolItem / CollectableRelic 的名字（None 时为空串）
 };
 
 struct Tint {

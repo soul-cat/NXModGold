@@ -57,6 +57,8 @@ class Entry:
     icon_source: str
     icon_name: str
     icon_scale: float
+    item_check: str
+    item_name: str
 
 
 def load_json(source: Path, name: str) -> object:
@@ -130,7 +132,7 @@ def resolve(candidates: list[rules.Candidate], scenes: dict[str, dict], pd_field
             skipped.append(f"{c.source}: {reason}: {c.scene}/{c.persistent_id}")
             continue
         entries[key] = Entry(c.scene, c.persistent_id, c.kind, c.check, c.threshold, offset, c.x, c.y,
-                             float(size["Width"]), float(size["Height"]), *rules.icon_for(c))
+                             float(size["Width"]), float(size["Height"]), *rules.icon_for(c), c.item_check, c.item_name)
     kind_order = {name: i for i, name in enumerate(rules.KIND_NAMES)}
     return sorted(entries.values(), key=lambda e: (kind_order[e.kind], e.scene, e.x, e.y, e.persistent_id))
 
@@ -152,7 +154,8 @@ def render_row(e: Entry) -> str:
     return (
         f"    {{{c_string(e.scene)}, {c_string(e.persistent_id)}, CollectibleKind::{e.kind}, CheckKind::{e.check}, "
         f"{e.threshold}, 0x{e.pd_offset:X}, {e.x:.3f}f, {e.y:.3f}f, {e.scene_width:.1f}f, {e.scene_height:.1f}f, "
-        f"IconSource::{e.icon_source}, {c_string(e.icon_name)}, {e.icon_scale:.3f}f}},"
+        f"IconSource::{e.icon_source}, {c_string(e.icon_name)}, {e.icon_scale:.3f}f, "
+        f"ItemCheck::{e.item_check}, {c_string(e.item_name)}}},"
     )
 
 
@@ -183,9 +186,11 @@ DATA_FILES = ("persistent_bools", "persistent_scenes", "item_locations", "item_f
 def print_report(entries: list[Entry], skipped: list[str], holders: int) -> None:
     kinds = Counter(e.kind for e in entries)
     checks = Counter(e.check for e in entries)
+    item_checks = Counter(e.item_check for e in entries)
     for kind in rules.KIND_NAMES:
         print(f"    {kind:<15} {kinds.get(kind, 0)}")
     print("    判定: " + ", ".join(f"{name} {checks.get(name, 0)}" for name in rules.CHECK_NAMES))
+    print("    物品判定: " + ", ".join(f"{name} {item_checks.get(name, 0)}" for name in rules.ITEM_CHECK_NAMES))
     for reason, count in sorted(Counter(skipped).items()):
         print(f"[!] 跳过 ×{count} {reason}")
     print(f"[!] 跳过 ×{holders} breakable_holders（念珠/贝壳碎片容器）：persistentInts <= 0 无对应 CheckKind")

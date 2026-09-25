@@ -1,4 +1,4 @@
-"""50-gen-collectibles.py 的自检：合成数据覆盖 4 种 CheckKind、物品分类、剔除规则与输出格式。"""
+"""50-gen-collectibles.py 的自检：合成数据覆盖 4 种 CheckKind、物品判定、物品分类、剔除规则与输出格式。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import collectibles_tables as tables
 
 SCENE_SIZES = {"Crawl_02": (30, 150), "Crawl_09": (40, 60), "Tut_01": (80, 40), "Ward_04": (50, 50),
                "Ward_01": (60, 60), "Dust_12": (70, 30), "Arborium_08": (90, 90), "Bonetown": (120, 80),
-               "Hang_01": (100, 50), "Bone_16": (60, 40), "Crawl_01": (50, 50)}
+               "Hang_01": (100, 50), "Bone_16": (60, 40), "Crawl_01": (50, 50), "Hang_10": (92, 48)}
 PD_FIELDS = {"SavedFlea_Dust_12": 0x81A, "tamedGiantFlea": 0x774, "HasWardMap": 0x2F9,
              "PurchasedBonebottomHeartPiece": 0x396}
 FAKE_DUMP = """// Namespace:
@@ -48,6 +48,7 @@ def _persistent_bools() -> list[dict]:
         _bool("Collectable Item Pickup", "Crawl_09", "Crest Socket Unlocker"),
         _bool("Collectable Item Pickup", "Tut_01", "Rosary_Set_Frayed", details="Silent when hero below"),
         _bool("Collectable Item Pickup", "Bone_16", "Straight Pin"),
+        _bool("Collectable Item Pickup", "Hang_10", "Psalm Cylinder Hang", details="Deparent"),
         _bool("Breakable Wall", "Crawl_02", details="breakable_wall_v2"),
         _bool("Collectable Item Pickup", "Library_02", "Pale_Oil"),  # Inaccessible
         _bool("Collectable Item Pickup - Purse", "Crawl_01", "Dead Mans Purse", tests=steel_only),
@@ -62,6 +63,8 @@ def _data() -> dict[str, list | dict]:
                 "Hierarchy": _hierarchy("Ward_01", ("Get Map Inspect", 7.0, 8.0), persistent=False)}
     pin = {"ObtainType": "Pickup", "ItemId": "Straight Pin", "sheetName": "Tools", "linkedPDBool": None,
            "Hierarchy": _hierarchy("Bone_12", ("Other Pin", 0.0, 0.0))}
+    relic = {"ObtainType": "Pickup", "ItemId": "Psalm Cylinder Hang", "sheetName": "CollectableRelic",
+             "linkedPDBool": None, "Hierarchy": _hierarchy("Bone_12", ("Other Relic", 0.0, 0.0))}
 
     def flea(go_name: str, scene: str) -> dict:
         return {"SavedItemId": "FleasCollected Target", "GoName": go_name, "ActionName": "SavedItemGetV2",
@@ -78,7 +81,7 @@ def _data() -> dict[str, list | dict]:
     return {
         "persistent_bools": _persistent_bools(),
         "persistent_scenes": {f"A/{s}.unity": {"Width": w, "Height": h} for s, (w, h) in SCENE_SIZES.items()},
-        "item_locations": [grub, ward_map, pin],
+        "item_locations": [grub, ward_map, pin, relic],
         "item_fsm_actions": [flea("Flea Rescue Sleeping", "Dust_12"), flea("Giant Flea", "Arborium_08")],
         "shops": [shop], "playmakers": [], "tracker_markers": [], "rosary_caches": caches,
         "geo_rocks": [rock], "breakable_misc": [], "breakable_holders": [],
@@ -92,6 +95,7 @@ def _expectations() -> dict[tuple[str, str], tuple[str, str, int]]:
         ("Crawl_09", "Collectable Item Pickup"): ("MemoryLocket", "PersistentBool", 0),
         ("Tut_01", "Collectable Item Pickup"): ("Rosary", "PersistentBool", 0),
         ("Bone_16", "Collectable Item Pickup"): ("Tool", "PersistentBool", 0),
+        ("Hang_10", "Collectable Item Pickup"): ("Relic", "PersistentBool", 0),
         ("Ward_04", "Silk Grub Large Cocoon"): ("SilkEater", "PersistentBool", 0),
         ("Ward_01", "HasWardMap"): ("Collectable", "PlayerDataBool", 0x2F9),
         ("Bonetown", "PurchasedBonebottomHeartPiece"): ("MaskShard", "PlayerDataBool", 0x396),
@@ -115,11 +119,15 @@ def _check_entries(gen: ModuleType) -> list[tuple[bool, str]]:
         checks.append((ok, f"{key} 应为 {kind}/{check}/{number}"))
     heart = got.get(("Crawl_02", "Heart Piece"))
     checks.append((heart is not None and (heart.x, heart.y) == (22.25, 5.0), "坐标应为各级相加"))
+    items = {key: (e.item_check, e.item_name) for key, e in got.items() if e.item_check != "None"}
+    checks.append((items == {("Bone_16", "Collectable Item Pickup"): ("ToolUnlocked", "Straight Pin"),
+                             ("Hang_10", "Collectable Item Pickup"): ("RelicCollected", "Psalm Cylinder Hang")},
+                   "只有工具 / 遗物带物品判定（名字取 ActualItemId）"))
     checks.append((any("缺场景尺寸: Nowhere/Silk Spool" in s for s in skipped), "缺尺寸的应被跳过并报告"))
     checks.append((any(s.endswith(": Compass") for s in skipped), "无 PlayerData bool 的商品应被跳过并报告"))
     row = ('{"Crawl_02", "Heart Piece", CollectibleKind::MaskShard, CheckKind::PersistentBool, 0, 0x0, '
            '22.250f, 5.000f, 30.0f, 150.0f, IconSource::SpriteName, "Inv_0030_inv_health_backboard_mask_full", '
-           '0.105f},')
+           '0.105f, ItemCheck::None, ""},')
     checks.append((heart is not None and row in gen.render_header(entries, "fixture.zip"), "输出行格式"))
     return checks
 
@@ -139,6 +147,7 @@ def _check_misc(gen: ModuleType) -> list[tuple[bool, str]]:
         text = gen.CONTRACT.read_text(encoding="utf-8")
         checks.append((_enum_names(text, "CollectibleKind") == rules.KIND_NAMES, "KIND_NAMES 与契约同序"))
         checks.append((_enum_names(text, "CheckKind") == rules.CHECK_NAMES, "CHECK_NAMES 与契约同序"))
+        checks.append((_enum_names(text, "ItemCheck") == rules.ITEM_CHECK_NAMES, "ITEM_CHECK_NAMES 与契约同序"))
         sources = {source for source, _, _ in tables.KIND_ICONS.values()}
         checks.append((sources <= set(_enum_names(text, "IconSource")), "KIND_ICONS 的 IconSource 都在契约里"))
     checks.append((set(tables.KIND_ICONS) == set(rules.KIND_NAMES), "每个分类都有图标"))

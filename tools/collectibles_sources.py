@@ -8,8 +8,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import collectibles_tables as tables
-from collectibles_rules import (CURRENCY_KINDS, Candidate, first_name, is_steel_soul_only, item_kind, make_candidate,
-                                sprite_name)
+from collectibles_rules import (CURRENCY_KINDS, Candidate, first_name, is_steel_soul_only, item_fields, item_kind,
+                                make_candidate, sprite_name)
 
 UNEXPRESSIBLE = "判定只能靠运行时物品状态（ToolItem/Materium/Memento 等），4 种 CheckKind 无法表达"
 KEY_ITEMS_EXCLUDED = frozenset({"Ward Key", "Simple Key", "Dock Demo Key"})
@@ -43,12 +43,12 @@ def from_item_locations(locations: list[dict], sheets: dict[str, str], skipped: 
         if kind in CURRENCY_KINDS:
             continue
         linked = loc.get("linkedPDBool") or ""
-        icon = sprite_name(loc.get("TextureAssetPath"))
+        extra = {"source": "item_locations", "icon": sprite_name(loc.get("TextureAssetPath")),
+                 **item_fields(kind, item, sheets)}
         if hierarchy["Transforms"][0]["Controls"]["Persistent"]:
-            found.append(make_candidate(hierarchy, first_name(hierarchy), kind, "PersistentBool",
-                                        source="item_locations", icon=icon))
+            found.append(make_candidate(hierarchy, first_name(hierarchy), kind, "PersistentBool", **extra))
         elif linked:
-            found.append(make_candidate(hierarchy, linked, kind, "PlayerDataBool", source="item_locations", icon=icon))
+            found.append(make_candidate(hierarchy, linked, kind, "PlayerDataBool", **extra))
         else:
             skipped.append(f"item_locations: {UNEXPRESSIBLE}: {item}")
     return found
@@ -75,8 +75,9 @@ def from_fsm_actions(actions: list[dict], sheets: dict[str, str], skipped: list[
         if not linked:
             skipped.append(f"item_fsm_actions: {UNEXPRESSIBLE}: {item}")
             continue
-        found.append(make_candidate(action["Hierarchy"], linked, item_kind(item, sheets), "PlayerDataBool",
-                                    source="item_fsm_actions", icon=sprite_name(action.get("TextureAssetPath"))))
+        kind = item_kind(item, sheets)
+        found.append(make_candidate(action["Hierarchy"], linked, kind, "PlayerDataBool", source="item_fsm_actions",
+                                    icon=sprite_name(action.get("TextureAssetPath")), **item_fields(kind, item, sheets)))
     return found
 
 
@@ -124,7 +125,8 @@ def from_shops(owners: list[dict], sheets: dict[str, str], skipped: list[str]) -
                 skipped.append(f"shops: {UNEXPRESSIBLE}: {item['SavedItemId']}")
                 continue
             found.append(make_candidate(owner["Hierarchy"], flag, kind, "PlayerDataBool", source="shops",
-                                        icon=sprite_name(item.get("SpriteTextureName"))))
+                                        icon=sprite_name(item.get("SpriteTextureName")),
+                                        **item_fields(kind, item["SavedItemId"], sheets)))
     return found
 
 

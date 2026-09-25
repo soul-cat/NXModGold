@@ -18,12 +18,16 @@ KIND_NAMES: tuple[str, ...] = (
     "Ability", "Flea",
 )
 CHECK_NAMES: tuple[str, ...] = ("PersistentBool", "PersistentIntAtLeast", "GeoRockDepleted", "PlayerDataBool")
+# 与契约的 ItemCheck 同序：主判定没过时再查物品状态（Completionist 判定第 3 步）
+ITEM_CHECK_NAMES: tuple[str, ...] = ("None", "ToolUnlocked", "RelicCollected")
 
 # 念珠 / 贝壳碎片这类"货币"物品：商店与 item_locations 里 Completionist 会 HidesSelf
 CURRENCY_KINDS: frozenset[str] = frozenset({"Rosary", "ShellShard"})
 # item_locations.json 的 sheetName → 分类（Completionist 运行时查 ToolItemManager / CollectableRelicManager，
 # 离线只能靠本地化表名近似）
 SHEET_KINDS: dict[str, str] = {"Tools": "Tool", "CollectableRelic": "Relic"}
+# 工具 / 遗物拾取后多数不留场景持久布尔（实测存档 24 个已访问工具点只有 2 个有记录），要按物品名查运行时状态
+ITEM_CHECKS: dict[str, str] = {"Tool": "ToolUnlocked", "Relic": "RelicCollected"}
 # 按物品名直接定类（GetFilterFor 的覆盖 + 离线补充）
 NAMED_ITEM_KINDS: dict[str, str] = {
     "Heart Piece": "MaskShard",
@@ -51,6 +55,8 @@ class Candidate:
     anchor: str         # "ActualScenePath|首个 transform 名"，用于 item_locations 顶替同物体的持久布尔
     source: str
     icon: str = ""      # 数据自带的贴图名（TextureAssetPath.SpriteAssetName），没有为空
+    item_check: str = "None"  # ITEM_CHECK_NAMES 之一
+    item_name: str = ""       # ToolItem / CollectableRelic 的名字（item_check 为 None 时为空）
 
 
 def ci_contains(text: str, pattern: str) -> bool:
@@ -68,7 +74,7 @@ def first_name(hierarchy: dict) -> str:
 
 
 def make_candidate(hierarchy: dict, persistent_id: str, kind: str, check: str, **extra: object) -> Candidate:
-    """extra 可带 scene（覆盖 CleanScenePath）、threshold、source、icon。"""
+    """extra 可带 scene（覆盖 CleanScenePath）、threshold、source、icon，以及 item_fields() 的结果。"""
     x, y = world_position(hierarchy)
     return Candidate(
         scene=str(extra.get("scene") or hierarchy["CleanScenePath"]),
@@ -82,7 +88,18 @@ def make_candidate(hierarchy: dict, persistent_id: str, kind: str, check: str, *
         anchor=f"{hierarchy['ActualScenePath']}|{first_name(hierarchy)}",
         source=str(extra.get("source", "")),
         icon=str(extra.get("icon") or ""),
+        item_check=str(extra.get("item_check", "None")),
+        item_name=str(extra.get("item_name", "")),
     )
+
+
+def item_fields(kind: str, item_id: str, sheets: dict[str, str]) -> dict[str, str]:
+    """工具 / 遗物的物品判定（make_candidate 的 extra）。名字必须在 item_locations 的对应 sheet 里，
+    否则可能是 Details 说明文字或能力开关（丝技用 PlayerData bool），不给物品判定。"""
+    check = ITEM_CHECKS.get(kind)
+    if check is None or SHEET_KINDS.get(sheets.get(item_id, "")) != kind:
+        return {}
+    return {"item_check": check, "item_name": item_id}
 
 
 def sprite_name(asset_path: dict | None) -> str:
@@ -268,6 +285,7 @@ def from_persistent_bools(records: list[dict], sheets: dict[str, str]) -> tuple[
         if kind is None:
             continue
         candidate = make_candidate(record["Hierarchy"], record["Id"], kind, "PersistentBool",
-                                   source="persistent_bools", icon=sprite_name(record.get("TextureAssetPath")))
+                                   source="persistent_bools", icon=sprite_name(record.get("TextureAssetPath")),
+                                   **item_fields(kind, record.get("ActualItemId") or record["Details"], sheets))
         (uncounted if is_hidden_from_count(record) else counted).append(candidate)
     return counted, uncounted

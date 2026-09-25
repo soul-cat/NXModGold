@@ -1,4 +1,4 @@
-// 地图收集物的"已收集"判定（CheckKind 的四种方式）。
+// 地图收集物的"已收集"判定：CheckKind 的四种主判定，没过再查 ItemCheck 的物品状态。
 //
 // SceneData 的三个集合（persistentBools / persistentInts / geoRocks）都是
 // PersistentItemDataCollection<T, ...>，其 TryGetValue 是共享泛型实现：
@@ -57,8 +57,42 @@ inline bool isPlayerDataFlagSet(uint32_t offset) {
   return playerData != nullptr && ui::readField<bool>(playerData, offset);
 }
 
+/// CollectableRelicManager.GetRelicData 的返回值：3 字节 struct 按值放在 w0（AAPCS64 小聚合返回），
+/// 游戏 CollectableRelic.get_IsInInventory 调用点 `and w8, w0, #0x101` 取字节 0 / 1，反汇编核实
+struct RelicSavedData {
+  bool isCollected;
+  bool isDeposited;
+  bool hasSeenInRelicBoard;
+};
+static_assert(sizeof(RelicSavedData) == 3, "须与 CollectableRelicsData.Data 同布局");
+
+/// 两个静态方法都在被调方内做元数据 / 类初始化（反汇编核实），不用像 TryGetValue 那样先初始化槽
+inline bool isToolUnlocked(ui::ManagedString name) {
+  ui::ManagedObject tool = call<ui::ManagedObject>(TIM_GETTOOLBYNAME, name);
+  return tool != nullptr && call<bool>(TOOL_GETISUNLOCKED, tool);
+}
+
+/// GetRelicData 传 null 会在托管侧抛异常，先确认 GetRelic 找到了
+inline bool isRelicCollected(ui::ManagedString name) {
+  ui::ManagedObject relic = call<ui::ManagedObject>(CRM_GETRELIC, name);
+  return relic != nullptr && call<RelicSavedData>(CRM_GETRELICDATA, relic).isCollected;
+}
+
+/// 物品名查不到（null）当作未收集
+inline bool isItemCollected(ItemCheck check, ui::ManagedString itemName) {
+  switch (check) {
+    case ItemCheck::None:
+      return false;
+    case ItemCheck::ToolUnlocked:
+      return isToolUnlocked(itemName);
+    case ItemCheck::RelicCollected:
+      return isRelicCollected(itemName);
+  }
+  return false;
+}
+
 /// 查不到记录一律当作未收集（没去过的场景本来就没有记录）；strings 是该条目钉住的托管字符串
-inline bool isCollected(const CollectibleEntry& entry, const EntryStrings& strings) {
+inline bool isPrimaryCollected(const CollectibleEntry& entry, const EntryStrings& strings) {
   switch (entry.check) {
     case CheckKind::PersistentBool: {
       const uint8_t* record = findBoolRecord(strings);
@@ -76,6 +110,11 @@ inline bool isCollected(const CollectibleEntry& entry, const EntryStrings& strin
       return isPlayerDataFlagSet(entry.playerDataOffset);
   }
   return false;
+}
+
+/// 主判定 || 物品判定（Completionist 同序：先持久布尔，再物品状态）
+inline bool isCollected(const CollectibleEntry& entry, const EntryStrings& strings) {
+  return isPrimaryCollected(entry, strings) || isItemCollected(entry.itemCheck, strings.itemName);
 }
 
 }  // namespace sshud::map
