@@ -23,9 +23,9 @@ constexpr int32_t FALLBACK_ON_INDEX = 1;   // 认不出键名时按"0 关 1 开"
 
 /// 行标签，顺序同 toggles::FEATURES
 constexpr const char16_t* LABELS_ZH[toggles::FEATURE_COUNT] = {u"小怪血条", u"BOSS 血条", u"伤害数字", u"地图收集物",
-                                                                u"美食家免送肉"};
+                                                                u"送货不损坏"};
 constexpr const char16_t* LABELS_EN[toggles::FEATURE_COUNT] = {u"Enemy HP Bars", u"Boss HP Bar", u"Damage Numbers",
-                                                                u"Map Collectibles", u"Skip Gourmand Meat"};
+                                                                u"Map Collectibles", u"Unbreakable Deliveries"};
 
 inline bool isSimplifiedChinese(int32_t languageCode) {
   return languageCode == LANGUAGE_ZH || languageCode == LANGUAGE_ZH_CN || languageCode == LANGUAGE_ZH_SG;

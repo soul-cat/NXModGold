@@ -2,14 +2,13 @@
 //   1. HealthManager.TakeDamage —— 打前/打后快照算实际掉血（与 PC 版一致），
 //      同时处理 sendDamageTo 伤害重定向；只记玩家造成的伤害。
 //   2. CameraController.LateUpdate —— 每帧确保 PlayMakerGUI 存在（它的 OnGUI 是绘制入口），
-//      读开关面板输入、美食家免送肉（gourmand_skip.hpp）；首帧打开 SD 卡日志，按需导出整个存档，再导入 SD 上待导入的存档（此时游戏的 fs 与 save 挂载都已就绪）。
+//      读开关面板输入；首帧打开 SD 卡日志，按需导出整个存档，再导入 SD 上待导入的存档（此时游戏的 fs 与 save 挂载都已就绪）。
 //   3. PlayMakerGUI.OnGUI —— 原函数之后画 HUD。
 // 三者都跑在 Unity 主线程，共享的 HudModel 无需加锁。
 
 #pragma once
 
 #include "boss_detect.hpp"
-#include "gourmand_skip.hpp"
 #include "hud_draw.hpp"
 #include "hud_model.hpp"
 #include "lib.hpp"
@@ -87,7 +86,6 @@ HOOK_DEFINE_TRAMPOLINE(CameraLateUpdateHook) {
     sshud::saveexport::runOnce();  // 先导出再导入：导出的是导入前的原样存档
     sshud::saveimport::runOnce();
     sshud::toggles::pollInput();
-    sshud::gourmand::applyIfDue(sshud::unity::unscaledTime());
     sshud::hud::scanForBosses(sshud::hud::g_model, sshud::unity::unscaledTime());
     void* gui = sshud::unity::ensurePlayMakerGui();
     if (!s_announced && gui != nullptr) {

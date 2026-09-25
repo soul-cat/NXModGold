@@ -111,10 +111,10 @@ static void testMenuReleaseWithoutOpen() {
 // ---------------------------------------------------------------- Settings
 
 static void testSettingsDefaultsAndFlip() {
-  std::printf("test: HUD 功能默认开、任务作弊默认关，flip 翻转，flip(None) 无操作\n");
+  std::printf("test: HUD 功能默认开、送货保护默认关，flip 翻转，flip(None) 无操作\n");
   Settings settings;
   for (size_t i = 0; i < PANEL_FEATURE_COUNT; ++i) CHECK(settings.isEnabled(static_cast<Feature>(i)));
-  CHECK(!settings.isEnabled(Feature::SkipGourmandMeat));
+  CHECK(!settings.isEnabled(Feature::ProtectDelivery));
   settings.flip(Feature::BossBar);
   CHECK(!settings.isEnabled(Feature::BossBar));
   CHECK(settings.isEnabled(Feature::EnemyBars) && settings.isEnabled(Feature::DamageNumbers) &&
@@ -139,7 +139,7 @@ static void testFormatSettingsDefaults() {
       "boss_bar=1\n"
       "damage_numbers=1\n"
       "map_markers=1\n"
-      "skip_gourmand_meat=0\n";
+      "protect_delivery=0\n";
   CHECK(std::strcmp(text, expected) == 0);
   CHECK(length == std::strlen(expected));
 }

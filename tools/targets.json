@@ -292,13 +292,6 @@
       "field": "hasPinFleaMucklands",
       "required": true,
       "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
-    },
-    {
-      "name": "PD_GOURMANDGIVENMEAT",
-      "class": "PlayerData",
-      "field": "GourmandGivenMeat",
-      "required": true,
-      "_note": "美食家任务（Great Gourmand）五样菜之一：肉（钟心镇信使的肉袋）"
     }
   ],
   "methods": [
@@ -1023,11 +1016,19 @@
       "signature_contains": "DestroyImmediate(Object obj)"
     },
     {
-      "name": "PD_GOURMANDQUESTACCEPTED",
-      "class": "PlayerData",
-      "method": "get_GourmandQuestAccepted",
+      "name": "DQI_TAKEHITFORITEM",
+      "class": "DeliveryQuestItem",
+      "method": "TakeHitForItem",
+      "signature_contains": "TakeHitForItem(DeliveryQuestItem.ActiveItem item, bool hitEffect, int amount)",
       "required": true,
-      "_note": "QuestManager.GetQuest(\"Great Gourmand\").IsAccepted（反汇编核实）"
+      "_note": "hook：送货物品掉耐久的汇合点（受伤、硬着陆、冲刺撞墙、计时都走这里），减到 0 判任务失败"
+    },
+    {
+      "name": "DQI_BREAKALLINTERNAL",
+      "class": "DeliveryQuestItem",
+      "method": "BreakAllInternal",
+      "required": true,
+      "_note": "hook：一次碎掉全部（或只碎计时的）送货物品；危险地形重生、以及状态机反射调用的 BreakAllNoEffects / BreakTimedNoEffects"
     }
   ],
   "script": [
