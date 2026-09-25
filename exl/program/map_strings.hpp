@@ -16,7 +16,7 @@ struct EntryStrings {
 
 inline ui::ManagedString pinnedString(const char* text) {
   ui::ManagedString text16 = managedString(text);
-  if (text16 != nullptr) ui::mainFunction<uintptr_t (*)(void*, const void*)>(GCHANDLE_ALLOC)(text16, nullptr);
+  ui::pinObject(text16);
   return text16;
 }
 

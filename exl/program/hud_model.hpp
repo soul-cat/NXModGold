@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 namespace sshud::hud {
@@ -32,6 +33,11 @@ constexpr float LOW_HEALTH_RATIO = 0.49f;        // 低于此比例数字改白�
 
 constexpr int MAX_ENEMIES = 16;
 constexpr int MAX_POPUPS = 32;
+
+constexpr float FONT_SIZE_STEP = 2.0f;         // 字号按 2px 取整：IMGUI 动态字体每遇到新字号都要重建字形图集
+constexpr float MIN_FONT_SIZE = 1.0f;
+constexpr float TEXTURE_RETRY_SECONDS = 2.0f;  // 贴图建失败后两次重试的最小间隔
+constexpr int UINT32_BITS = 32;
 
 struct Rect {
   float x;
@@ -100,6 +106,27 @@ inline float popupProgress(float now, float startedAt) {
   return std::clamp((now - startedAt) / POPUP_DURATION_SECONDS, 0.0f, 1.0f);
 }
 
+/// 连续变化的字号（随相机缩放）取整到 FONT_SIZE_STEP 的倍数，至少 MIN_FONT_SIZE
+inline int32_t quantizeFontSize(float fontSize) {
+  return static_cast<int32_t>(std::max(MIN_FONT_SIZE, std::round(fontSize / FONT_SIZE_STEP) * FONT_SIZE_STEP));
+}
+
+/// 血量文字缓存的 key：(hp, maxHp) 拼成一个 64 位数，文字只由这两个数决定
+inline uint64_t healthTextKey(int32_t hp, int32_t maxHp) {
+  return (static_cast<uint64_t>(static_cast<uint32_t>(hp)) << UINT32_BITS) | static_cast<uint32_t>(maxHp);
+}
+
+/// 失败重试节流：两次尝试至少间隔 TEXTURE_RETRY_SECONDS
+struct RetryThrottle {
+  float nextAttemptAt = 0.0f;
+
+  bool tryAcquire(float now) {
+    if (now < nextAttemptAt) return false;
+    nextAttemptAt = now + TEXTURE_RETRY_SECONDS;
+    return true;
+  }
+};
+
 class HudModel {
  public:
   /// 记录一次掉血；hp 由绘制时实时读取，这里只存最大血量与时间。
@@ -129,6 +156,13 @@ class HudModel {
     for (Enemy& enemy : enemies_) {
       if (enemy.manager == manager) enemy = Enemy{};
     }
+  }
+
+  /// 没有要画的敌人 / 飘字（OnGUI 可以直接返回）
+  bool isEmpty() const {
+    const auto isActive = [](const auto& slot) { return slot.active; };
+    return std::none_of(enemies_, enemies_ + MAX_ENEMIES, isActive) &&
+           std::none_of(popups_, popups_ + MAX_POPUPS, isActive);
   }
 
   Enemy* enemies() { return enemies_; }

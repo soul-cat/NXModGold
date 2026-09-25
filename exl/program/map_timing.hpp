@@ -1,5 +1,5 @@
 // 地图刷新耗时统计（纯逻辑，tests/test_map_timing.cpp 覆盖）。
-// 每次刷新记一次耗时，攒满 TIMING_LOG_INTERVAL 次才写一行平均 / 最大值，
+// 每次完整刷新记一次耗时，攒满 TIMING_LOG_INTERVAL 次才写一行平均 / 最大值，
 // 避免每次开图都写 SD 卡（每写一行都要开文件、写入、flush、关文件，本身就会卡）。
 
 #pragma once
@@ -9,7 +9,7 @@
 
 namespace sshud::map {
 
-constexpr int TIMING_LOG_INTERVAL = 8;  // 大地图 / 快速地图每开一次刷新 2 遍，约 4 次开图写一行
+constexpr int TIMING_LOG_INTERVAL = 8;  // 只记完整刷新（每次开图一次），约 8 次开图写一行
 
 struct RefreshTiming {
   int count = 0;

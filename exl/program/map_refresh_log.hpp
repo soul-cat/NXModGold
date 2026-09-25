@@ -26,51 +26,6 @@ inline uint64_t elapsedMicros(uint64_t startTick) {
   return (systemTick() - startTick) * MICROS_PER_SECOND / SYSTEM_TICK_HZ;
 }
 
-inline uint64_t ticksToMicros(uint64_t ticks) { return ticks * MICROS_PER_SECOND / SYSTEM_TICK_HZ; }
-
-// ---------------------------------------------------------------- 分段耗时（诊断开图卡顿，只记前几次刷新）
-constexpr int PROFILE_LOG_LIMIT = 6;
-
-struct RefreshProfile {
-  uint64_t roomSave = 0;    // GameManager.SaveLevelState
-  uint64_t lookup = 0;      // 取标记 GameObject（GetChild）
-  uint64_t sceneQuery = 0;  // 场景信息（GetMapZoneFromSceneName / GetSceneInfo / IsMapped）
-  uint64_t position = 0;    // GetMapPosition + 设置 localPosition
-  uint64_t collected = 0;   // SceneData 查询
-  uint64_t activate = 0;    // SetActive
-  int sceneMisses = 0;      // 场景缓存未命中次数（= 实际查询次数）
-};
-
-inline RefreshProfile g_profile;
-
-/// 作用域计时：析构时把经过的 tick 累加到 total
-class ScopedTicks {
- public:
-  explicit ScopedTicks(uint64_t& total) : total_(total), start_(systemTick()) {}
-  ~ScopedTicks() { total_ += systemTick() - start_; }
-  ScopedTicks(const ScopedTicks&) = delete;
-  ScopedTicks& operator=(const ScopedTicks&) = delete;
-
- private:
-  uint64_t& total_;
-  uint64_t start_;
-};
-
-inline void logProfile() {
-  static int s_logged = 0;
-  if (s_logged >= PROFILE_LOG_LIMIT) return;
-  ++s_logged;
-  const RefreshProfile& p = g_profile;
-  Logging.Log("[sshud] map profile us: save=%llu lookup=%llu scene=%llu (queries=%d) pos=%llu collected=%llu "
-              "active=%llu",
-              static_cast<unsigned long long>(ticksToMicros(p.roomSave)),
-              static_cast<unsigned long long>(ticksToMicros(p.lookup)),
-              static_cast<unsigned long long>(ticksToMicros(p.sceneQuery)), p.sceneMisses,
-              static_cast<unsigned long long>(ticksToMicros(p.position)),
-              static_cast<unsigned long long>(ticksToMicros(p.collected)),
-              static_cast<unsigned long long>(ticksToMicros(p.activate)));
-}
-
 struct RefreshStats {
   int created = 0;
   int unplaceable = 0;

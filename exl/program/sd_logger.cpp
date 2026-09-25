@@ -1,5 +1,4 @@
 #include "sd_logger.hpp"
-#include "setting.hpp"
 
 #include <lib/log/svc_logger.hpp>
 #include <lib/nx/result.h>
@@ -25,7 +24,7 @@ constexpr const char* LOG_DIR = "sd:/config/sshud";
 constexpr const char* LOG_PATH = "sd:/config/sshud/log.txt";
 constexpr size_t PENDING_CAPACITY = 16 * 1024;
 constexpr size_t FAILURE_LINE_SIZE = 128;
-constexpr size_t LINE_CAPACITY = exl::setting::LogBufferSize + 1;  // 最长一条日志 + 换行
+constexpr float FLUSH_INTERVAL_SECONDS = 2.0f;
 
 enum class State : uint8_t { Buffering, Writing, Failed };
 
@@ -33,6 +32,7 @@ State s_state = State::Buffering;
 char s_pending[PENDING_CAPACITY];
 size_t s_pendingLength = 0;
 int64_t s_offset = 0;
+float s_lastFlushTime = 0.0f;
 
 /// 直接走 svc 日志报错，避免递归进 SdLogger
 void reportFailure(const char* step, Result rc) {
@@ -43,7 +43,7 @@ void reportFailure(const char* step, Result rc) {
   exl::log::SvcLogger{}.LogRaw(std::string_view{line, length});
 }
 
-/// 缓冲满了就丢弃后续行（只会在 start() 迟迟没被调用时发生）
+/// 缓冲满了就丢弃这一行（Buffering 期间只会在 start() 迟迟没被调用时发生）
 void bufferLine(std::string_view text) {
   if (PENDING_CAPACITY - s_pendingLength < text.size() + 1) return;
   std::memcpy(s_pending + s_pendingLength, text.data(), text.size());
@@ -68,13 +68,16 @@ bool writeBytes(const void* data, size_t size) {
   return true;
 }
 
-/// 一行一次 WriteFile（每次都 flush，实机上少一次 SD 写入就少一次卡顿风险）
-void writeLine(std::string_view text) {
-  char line[LINE_CAPACITY];
-  const size_t length = std::min(text.size(), LINE_CAPACITY - 1);
-  std::memcpy(line, text.data(), length);
-  line[length] = '\n';
-  writeBytes(line, length + 1);
+/// 整个缓冲一次写出（每次 SD 写入都要几毫秒，攒批写避免逐行卡主线程）
+void flushPending() {
+  if (s_pendingLength == 0) return;
+  if (writeBytes(s_pending, s_pendingLength)) s_pendingLength = 0;
+}
+
+/// 放不下就先把缓冲写出再追加
+void appendLine(std::string_view text) {
+  if (PENDING_CAPACITY - s_pendingLength < text.size() + 1) flushPending();
+  if (s_state == State::Writing) bufferLine(text);
 }
 
 /// 每次启动一份新日志；目录已存在时 CreateDirectory 报错，忽略即可
@@ -91,7 +94,7 @@ void SdLogger::LogRaw(std::string_view text) {
   if (s_state == State::Buffering) {
     bufferLine(text);
   } else if (s_state == State::Writing) {
-    writeLine(text);
+    appendLine(text);
   }
 }
 
@@ -104,7 +107,14 @@ void start() {
   rc = openFreshLog();
   if (R_FAILED(rc)) return reportFailure("CreateFile", rc);
   s_state = State::Writing;
-  if (writeBytes(s_pending, s_pendingLength)) s_pendingLength = 0;
+  flushPending();
+}
+
+void flushIfDue(float now) {
+  if (s_state != State::Writing || s_pendingLength == 0) return;
+  if (now - s_lastFlushTime < FLUSH_INTERVAL_SECONDS) return;
+  s_lastFlushTime = now;
+  flushPending();
 }
 
 }  // namespace sdlog

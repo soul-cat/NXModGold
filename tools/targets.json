@@ -169,6 +169,13 @@
       "field": "mapAllRooms",
       "required": false,
       "_note": "public bool，调试用的全地图显示；地图金手指会把它写成 true 并存进存档"
+    },
+    {
+      "name": "PMGUI_ENABLEGUILAYOUT",
+      "class": "PlayMakerGUI",
+      "field": "enableGUILayout",
+      "required": true,
+      "_note": "public bool；PlayMakerGUI.OnGUI 开头执行 useGUILayout = enableGUILayout（反汇编：ldrb [this,#0x21] → set_useGUILayout_Injected），所以要改这个字段而不是只调 set_useGUILayout"
     }
   ],
   "methods": [
@@ -739,6 +746,15 @@
       "signature_contains": "Alloc(object value)",
       "required": true,
       "_note": "把运行时创建的贴图钉住，免得托管包装被 GC 回收"
+    },
+    {
+      "name": "GCHANDLE_FREE",
+      "class": "GCHandle",
+      "namespace": "System.Runtime.InteropServices",
+      "method": "Free",
+      "signature_contains": "void Free()",
+      "required": true,
+      "_note": "实例方法（值类型）：原生签名 void (GCHandle* self, const MethodInfo*)；self 指向 Alloc 返回的句柄值"
     }
   ],
   "script": [

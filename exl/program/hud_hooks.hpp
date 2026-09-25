@@ -22,6 +22,9 @@ namespace sshud::hud {
 
 inline HudModel g_model;
 
+// 逐次命中日志：仅调研用，每行都是一次 SD 写入 + 额外的托管读取，战斗中会卡，平时关闭
+constexpr bool LOG_HITS = false;
+
 struct HpSnapshot {
   const void* manager = nullptr;
   int32_t hp = 0;
@@ -30,6 +33,16 @@ struct HpSnapshot {
 inline HpSnapshot snapshotOf(const void* manager) {
   if (!unity::isAlive(manager)) return {};
   return {manager, unity::readField<int32_t>(manager, HM_HP)};
+}
+
+/// size / big / kills：调研"怎样才算 BOSS"用（PC 版只看血量 > 105，大怪也会被当成 BOSS）
+inline void logHit(const HpSnapshot& before, int32_t after, int32_t maxHp) {
+  const uint8_t* record = journalRecordOf(before.manager);
+  Logging.Log("[sshud] hit hm=%p hp %d -> %d / %d dmg %d boss=%d size=%d big=%d kills=%d", before.manager,
+              before.hp, after, maxHp, before.hp - after, isBoss(maxHp) ? 1 : 0,
+              unity::readField<int32_t>(before.manager, HM_ENEMYSIZE),
+              unity::readField<bool>(before.manager, HM_BIGENEMYDEATH) ? 1 : 0,
+              record != nullptr ? unity::readField<int32_t>(record, EJR_KILLSREQUIRED) : -1);
 }
 
 /// 原函数执行后调用：血量确有下降才记账
@@ -42,13 +55,7 @@ inline void recordDamage(const HpSnapshot& before, float now) {
   g_model.onHit(before.manager, maxHp, now);
   const unity::Vector3 world = unity::worldPositionOf(before.manager);
   g_model.addPopup({world.x, world.y + POPUP_START_OFFSET_UNITS, world.z}, damage, now);
-  // size / big / kills：调研"怎样才算 BOSS"用（PC 版只看血量 > 105，大怪也会被当成 BOSS）
-  const uint8_t* record = journalRecordOf(before.manager);
-  Logging.Log("[sshud] hit hm=%p hp %d -> %d / %d dmg %d boss=%d size=%d big=%d kills=%d", before.manager,
-              before.hp, after, maxHp, damage, isBoss(maxHp) ? 1 : 0,
-              unity::readField<int32_t>(before.manager, HM_ENEMYSIZE),
-              unity::readField<bool>(before.manager, HM_BIGENEMYDEATH) ? 1 : 0,
-              record != nullptr ? unity::readField<int32_t>(record, EJR_KILLSREQUIRED) : -1);
+  if constexpr (LOG_HITS) logHit(before, after, maxHp);
 }
 
 }  // namespace sshud::hud
@@ -75,6 +82,7 @@ HOOK_DEFINE_TRAMPOLINE(CameraLateUpdateHook) {
   static void Callback(void* self, const void* method) {
     Orig(self, method);
     sshud::sdlog::start();
+    sshud::sdlog::flushIfDue(sshud::unity::unscaledTime());
     sshud::saveexport::runOnce();  // 先导出再导入：导出的是导入前的原样存档
     sshud::saveimport::runOnce();
     sshud::toggles::pollInput();

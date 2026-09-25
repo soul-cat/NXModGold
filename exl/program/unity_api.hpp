@@ -6,7 +6,7 @@
 // 与下面的 C++ 结构体一致，所以可以按值传。
 //
 // 只能在 Unity 主线程上调用（TakeDamage、LateUpdate、OnGUI 都在主线程）。
-// 托管对象（字符串等）是 GC 管理的，本模块不持有引用 —— 只在当帧内使用，绝不跨帧缓存。
+// 托管对象（字符串等）是 GC 管理的；本模块的静态区 GC 扫不到，跨帧缓存的必须用 pinObject 钉住。
 
 #pragma once
 
@@ -53,9 +53,30 @@ T readField(const void* base, uintptr_t offset) {
   return value;
 }
 
+template <typename T>
+void writeField(void* base, uintptr_t offset, T value) {
+  std::memcpy(static_cast<uint8_t*>(base) + offset, &value, sizeof(T));
+}
+
 /// UnityEngine.Object 被 Destroy 后 m_CachedPtr 清零；对它调任何 Unity API 都会抛异常。
 inline bool isAlive(const void* unityObject) {
   return unityObject != nullptr && readField<const void*>(unityObject, OBJ_CACHEDPTR) != nullptr;
+}
+
+/// GCHandle.Alloc 返回的句柄值（值类型 GCHandle 只有一个 IntPtr 字段）；0 表示没钉
+using PinHandle = uintptr_t;
+
+/// 钉住托管对象：本模块的静态区 GC 扫不到，跨帧持有的托管指针必须钉住，否则会被回收
+inline PinHandle pinObject(void* managedObject) {
+  if (managedObject == nullptr) return 0;
+  return mainFunction<PinHandle (*)(void*, const void*)>(GCHANDLE_ALLOC)(managedObject, nullptr);
+}
+
+/// 放开 pinObject 的句柄（GCHandle.Free 是值类型实例方法，this 指向句柄值）；handle 清零
+inline void unpinObject(PinHandle& handle) {
+  if (handle == 0) return;
+  mainFunction<void (*)(PinHandle*, const void*)>(GCHANDLE_FREE)(&handle, nullptr);
+  handle = 0;
 }
 
 // ---------------------------------------------------------------- 场景 / 相机
@@ -172,9 +193,17 @@ inline ManagedString localisedToString(const void* localisedString) {
 
 // ---------------------------------------------------------------- PlayMaker
 
-/// 不存在时会自建 GameObject 并挂 PlayMakerGUI（反汇编确认），从而保证每帧有 OnGUI
+/// 不存在时会自建 GameObject 并挂 PlayMakerGUI（反汇编确认），从而保证每帧有 OnGUI。
+///
+/// 同时关掉它的 enableGUILayout：PlayMakerGUI.OnGUI 开头会执行 useGUILayout = enableGUILayout
+/// （反汇编：ldrb [this,#0x21] → set_useGUILayout_Injected），所以只调 set_useGUILayout 会被下一次 OnGUI 改回去。
+/// useGUILayout 为 false 时 Unity 不再给这个脚本发 Layout 事件，OnGUI（连带遍历全部 FSM）每帧少跑一遍；
+/// HUD 只在 Repaint 里画，不需要 Layout。风险：用 GUILayout 的 FSM 动作（GUILayoutLabel 等调试 UI）会失效/报错，
+/// 发行版游戏预期不用这类动作。每帧写一个字节，比记住实例身份更稳（实例被销毁重建也能覆盖到）。
 inline ManagedObject ensurePlayMakerGui() {
-  return mainFunction<ManagedObject (*)(const void*)>(PMGUI_GETINSTANCE)(nullptr);
+  ManagedObject gui = mainFunction<ManagedObject (*)(const void*)>(PMGUI_GETINSTANCE)(nullptr);
+  if (gui != nullptr) writeField<bool>(gui, PMGUI_ENABLEGUILAYOUT, false);
+  return gui;
 }
 
 }  // namespace sshud::unity

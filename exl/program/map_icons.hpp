@@ -2,8 +2,9 @@
 //
 // 按名字找贴图：Resources.FindObjectsOfTypeAll(typeof(Sprite)) 扫一遍逐个比 name，
 // typeof(Sprite) 取自模板标记自己那张 sprite 的 GetType()，不碰 il2cpp 反射 API。
-// FindObjectsOfTypeAll 只返回已载入的资源，找不到的下次开图再试（调用方限次数）。
-// 查到的 Sprite 只在本次刷新内用、放在栈上：本模块的静态区 GC 扫不到，不能跨帧持有。
+// FindObjectsOfTypeAll 只返回已载入的资源，找不到的下次开图再试，最多 MAX_ICON_SCANS 次（整个进程）。
+// 按名字查到的 Sprite 是资源、不随 GameMap 重建，钉住后跨刷新复用（本模块的静态区 GC 扫不到，
+// 不钉会被回收），地图重建后不必再扫；其余来源（念珠、跳蚤、道具图标）每次现取、放在栈上。
 
 #pragma once
 
@@ -17,6 +18,7 @@ namespace sshud::map {
 constexpr uintptr_t IL2CPP_STRING_LENGTH = 0x10;
 constexpr uintptr_t IL2CPP_STRING_CHARS = 0x14;
 constexpr int MAX_ICON_NAMES = 96;
+constexpr int MAX_ICON_SCANS = 5;  // 贴图可能要等相关界面载入过才找得到，开几次图后不再扫
 
 /// 托管字符串（UTF-16）是否等于 ASCII 串；不分配
 inline bool managedEquals(ui::ManagedString text, const char* ascii) {
@@ -35,15 +37,32 @@ inline ui::ManagedObject spriteOf(ui::ManagedObject go) {
   return ui::isAlive(renderer) ? call<ui::ManagedObject>(SR_GETSPRITE, renderer) : nullptr;
 }
 
-/// 一次扫描找齐一批贴图名
+/// 按贴图名找到的 Sprite（钉住，跨刷新 / 跨 GameMap 复用）
 class SpriteLookup {
  public:
   void want(const char* name) {
     if (count_ < MAX_ICON_NAMES && indexOf(name) < 0) names_[count_++] = name;
   }
 
+  bool hasNames() const { return count_ > 0; }
+
+  /// 已找到但原生对象被卸掉的贴图（如回主菜单后 GameMap 重建）当作没找到，放开钉子，允许重扫
+  void evictDead() {
+    for (int j = 0; j < count_; ++j) {
+      if (sprites_[j] == nullptr || ui::isAlive(sprites_[j])) continue;
+      ui::unpinObject(pins_[j]);
+      sprites_[j] = nullptr;
+      --found_;
+    }
+  }
+
+  /// 还有名字没找到且扫描次数没用完
+  bool canScan() const { return found_ < count_ && scans_ < MAX_ICON_SCANS; }
+
+  /// 扫一遍已载入的全部 Sprite，找没找到的名字
   void scan(ui::ManagedObject anySprite) {
-    if (count_ == 0 || !ui::isAlive(anySprite)) return;
+    if (!canScan() || !ui::isAlive(anySprite)) return;
+    ++scans_;
     ui::ManagedObject spriteType = call<ui::ManagedObject>(SYSOBJ_GETTYPE, anySprite);
     const void* all = call<const void*>(RES_FINDOBJECTSOFTYPEALL, spriteType);
     if (all == nullptr) return;
@@ -63,6 +82,7 @@ class SpriteLookup {
     for (int j = 0; j < count_; ++j) {
       if (sprites_[j] == nullptr && managedEquals(name, names_[j])) {
         sprites_[j] = sprite;
+        pins_[j] = ui::pinObject(sprite);  // 一直持有，直到原生对象被卸掉（evictDead）
         ++found_;
         return;
       }
@@ -78,9 +98,16 @@ class SpriteLookup {
 
   const char* names_[MAX_ICON_NAMES] = {};
   ui::ManagedObject sprites_[MAX_ICON_NAMES] = {};
+  ui::PinHandle pins_[MAX_ICON_NAMES] = {};
   int count_ = 0;
   int found_ = 0;
+  int scans_ = 0;
 };
+
+inline SpriteLookup& spriteLookup() {
+  static SpriteLookup s_lookup;
+  return s_lookup;
+}
 
 struct Icon {
   ui::ManagedObject sprite;
@@ -97,15 +124,12 @@ inline Icon fleaPinIcon(ui::ManagedObject gameMap) {
   return {spriteOf(gameObjectOf(pin)), call<ui::Vector3>(TR_GETLOCALSCALE, pin).x};
 }
 
-/// 本次刷新可用的全部图标来源
+/// 本次刷新可用的全部图标来源（含托管指针，必须放在栈上；按名字的贴图在 spriteLookup() 里）
 struct IconSet {
-  SpriteLookup byName;
   ui::ManagedObject smallGeo = nullptr;
   Icon flea{nullptr, 1.0f};
 
-  /// 先 byName.want(...) 登记要找的名字，再调它
-  void load(ui::ManagedObject gameMap, ui::ManagedObject markerTemplate) {
-    byName.scan(spriteOf(markerTemplate));
+  void load(ui::ManagedObject gameMap) {
     smallGeo = spriteOf(call<ui::ManagedObject>(GAMEPLAY_GETSMALLGEOPREFAB));
     flea = fleaPinIcon(gameMap);
   }
@@ -113,7 +137,7 @@ struct IconSet {
   Icon resolve(const CollectibleEntry& entry) const {
     switch (entry.iconSource) {
       case IconSource::SpriteName:
-        return {byName.get(entry.iconName), entry.iconScale};
+        return {spriteLookup().get(entry.iconName), entry.iconScale};
       case IconSource::SmallGeo:
         return {smallGeo, entry.iconScale};
       case IconSource::FleaPin:

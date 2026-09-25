@@ -139,6 +139,48 @@ static void testPopupPoolRecyclesOldest() {
   CHECK(model.popups()[0].damage == 999);
 }
 
+static void testIsEmpty() {
+  std::printf("test: 无敌人无飘字才算空\n");
+  HudModel model;
+  CHECK(model.isEmpty());
+  int a = 0;
+  model.onHit(&a, 10, 1.0f);
+  CHECK(!model.isEmpty());
+  model.forget(&a);
+  CHECK(model.isEmpty());
+  model.addPopup({0, 0, 0}, 3, 1.0f);
+  CHECK(!model.isEmpty());
+  model.expire(1.0f + POPUP_DURATION_SECONDS);
+  CHECK(model.isEmpty());
+}
+
+static void testQuantizeFontSize() {
+  std::printf("test: 字号按步长取整，至少 1\n");
+  CHECK(quantizeFontSize(24.0f) == 24);
+  CHECK(quantizeFontSize(24.9f) == 24);
+  CHECK(quantizeFontSize(25.1f) == 26);
+  CHECK(quantizeFontSize(0.2f) == 1);
+  CHECK(quantizeFontSize(19.2f) == 20 && quantizeFontSize(20.8f) == 20);
+}
+
+static void testHealthTextKey() {
+  std::printf("test: 血量文字 key 区分 hp 与 maxHp\n");
+  CHECK(healthTextKey(5, 10) == healthTextKey(5, 10));
+  CHECK(healthTextKey(5, 10) != healthTextKey(10, 5));
+  CHECK(healthTextKey(4, 10) != healthTextKey(5, 10));
+  CHECK(healthTextKey(0, 1000) != healthTextKey(0, 999));
+}
+
+static void testRetryThrottle() {
+  std::printf("test: 失败重试按间隔节流\n");
+  RetryThrottle throttle;
+  CHECK(throttle.tryAcquire(0.0f));
+  CHECK(!throttle.tryAcquire(0.5f));
+  CHECK(!throttle.tryAcquire(TEXTURE_RETRY_SECONDS - 0.1f));
+  CHECK(throttle.tryAcquire(TEXTURE_RETRY_SECONDS));
+  CHECK(!throttle.tryAcquire(TEXTURE_RETRY_SECONDS + 0.1f));
+}
+
 int main() {
   std::printf("=== HUD 模型测试 ===\n");
   testSameEnemyReusesSlot();
@@ -152,6 +194,10 @@ int main() {
   testHealthRatio();
   testPopupProgress();
   testPopupPoolRecyclesOldest();
+  testIsEmpty();
+  testQuantizeFontSize();
+  testHealthTextKey();
+  testRetryThrottle();
   if (g_failed) {
     std::printf("\n%d 项失败\n", g_failed);
     return EXIT_FAILURE;

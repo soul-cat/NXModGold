@@ -34,12 +34,8 @@ inline ui::ManagedObject gameObjectOf(ui::ManagedObject c) { return call<ui::Man
 inline void setActive(ui::ManagedObject go, bool on) { call<void>(GO_SETACTIVE, go, on); }
 inline void destroyObject(ui::ManagedObject o) { call<void>(UOBJ_DESTROY, o); }
 
-inline ui::ManagedObject findChild(ui::ManagedObject tr, const char* name) {
-  return call<ui::ManagedObject>(TR_FIND, tr, managedString(name));
-}
 inline ui::ManagedObject childAt(ui::ManagedObject tr, int32_t i) { return call<ui::ManagedObject>(TR_GETCHILD, tr, i); }
 inline int32_t childCount(ui::ManagedObject tr) { return call<int32_t>(TR_GETCHILDCOUNT, tr); }
-inline int32_t siblingIndex(ui::ManagedObject tr) { return call<int32_t>(TR_GETSIBLINGINDEX, tr); }
 inline ui::ManagedObject componentByName(ui::ManagedObject go, const char* type) {
   return call<ui::ManagedObject>(GO_GETCOMPONENT_STR, go, managedString(type));
 }

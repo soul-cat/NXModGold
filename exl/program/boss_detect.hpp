@@ -35,11 +35,11 @@ inline const void* activeHealthManagers() {
   return statics != nullptr ? unity::readField<const void*>(statics, HM_ACTIVELIST_STATIC) : nullptr;
 }
 
+/// 先查纯字段读取，最后才做两次托管调用的 isActiveInHierarchy
 inline bool isBossCandidate(const void* manager) {
-  if (!unity::isAlive(manager) || !unity::isActiveInHierarchy(manager)) return false;
-  if (unity::readField<bool>(manager, HM_ISDEAD)) return false;
+  if (!unity::isAlive(manager) || unity::readField<bool>(manager, HM_ISDEAD)) return false;
   if (unity::readField<const void*>(manager, HM_SENDDAMAGETO) != nullptr) return false;
-  return isBoss(unity::readField<int32_t>(manager, HM_HP));
+  return isBoss(unity::readField<int32_t>(manager, HM_HP)) && unity::isActiveInHierarchy(manager);
 }
 
 /// 每帧调用；只在 BOSS 标题出现后的窗口期内干活

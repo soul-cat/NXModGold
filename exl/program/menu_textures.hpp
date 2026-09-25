@@ -13,6 +13,7 @@ namespace sshud::hud {
 struct TextImage {
   unity::ManagedObject texture = nullptr;
   float width = 0.0f;
+  unity::PinHandle pin = 0;
 };
 
 struct MenuTextures {
@@ -22,8 +23,9 @@ struct MenuTextures {
   TextImage off;
 };
 
-inline TextImage createTextImage(const TextureBlob& blob) {
-  return {createTexture(blob), static_cast<float>(blob.width)};
+inline void ensureTextImage(TextImage& image, const TextureBlob& blob) {
+  ensureTexture(image.texture, image.pin, blob);
+  image.width = static_cast<float>(blob.width);
 }
 
 inline bool isUsable(const MenuTextures& textures) {
@@ -36,18 +38,19 @@ inline bool isUsable(const MenuTextures& textures) {
 
 static_assert(toggles::FEATURE_COUNT == 4, "menuTextures() 按 FEATURES 顺序逐行建贴图，增删功能要同步改");
 
-/// 第一次用时建，被卸掉了就重建
-inline const MenuTextures* menuTextures() {
+/// 第一次用时建，被卸掉了就只重建失效的；失败后按 RetryThrottle 节流（now：unscaledTime）
+inline const MenuTextures* menuTextures(float now) {
   static MenuTextures s_textures;
-  if (!isUsable(s_textures)) {
-    s_textures.title = createTextImage(MENU_TEXT_TITLE);
-    s_textures.rows[0] = createTextImage(MENU_TEXT_ENEMY_BARS);
-    s_textures.rows[1] = createTextImage(MENU_TEXT_BOSS_BAR);
-    s_textures.rows[2] = createTextImage(MENU_TEXT_DAMAGE_NUMBERS);
-    s_textures.rows[3] = createTextImage(MENU_TEXT_MAP_MARKERS);
-    s_textures.on = createTextImage(MENU_TEXT_ON);
-    s_textures.off = createTextImage(MENU_TEXT_OFF);
-  }
+  static RetryThrottle s_retry;
+  if (isUsable(s_textures)) return &s_textures;
+  if (!s_retry.tryAcquire(now)) return nullptr;
+  ensureTextImage(s_textures.title, MENU_TEXT_TITLE);
+  ensureTextImage(s_textures.rows[0], MENU_TEXT_ENEMY_BARS);
+  ensureTextImage(s_textures.rows[1], MENU_TEXT_BOSS_BAR);
+  ensureTextImage(s_textures.rows[2], MENU_TEXT_DAMAGE_NUMBERS);
+  ensureTextImage(s_textures.rows[3], MENU_TEXT_MAP_MARKERS);
+  ensureTextImage(s_textures.on, MENU_TEXT_ON);
+  ensureTextImage(s_textures.off, MENU_TEXT_OFF);
   return isUsable(s_textures) ? &s_textures : nullptr;
 }
 
