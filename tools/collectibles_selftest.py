@@ -40,7 +40,13 @@ def _bool(obj_id: str, scene: str, item: str = "", details: str | None = None, *
 
 
 def _persistent_bools() -> list[dict]:
-    steel_only = [{"FieldName": "permadeathMode", "SetOn": "Collectable Item Pickup - Purse", "SetOff": "x"}]
+    # 同 Crawl_01 实际数据：permadeathMode == Off 时激活 SetOn（普通模式给亡虫囊，钢魂给 Shell Satchel）
+    purse_or_satchel = [{"FieldName": "permadeathMode", "SetOn": "Collectable Item Pickup - Purse",
+                         "SetOff": "Collectable Item Pickup - Satchel", "NumType": 0, "IntValue": 0}]
+    # permadeathMode > Off 时激活 SetOn：SetOn 这一支只在钢魂出现
+    steel_branch = [{"FieldName": "permadeathMode", "SetOn": "Steel", "SetOff": "Normal", "NumType": 3, "IntValue": 0}]
+    steel_heart = _bool("Heart Piece", "Crawl_09", tests=steel_branch)
+    steel_heart["Hierarchy"] = _hierarchy("Crawl_09", ("Heart Piece", 1.0, 1.0), ("Steel", 0.0, 0.0), tests=steel_branch)
     heart = _bool("Heart Piece", "Crawl_02", details="Behind Wall Control")
     heart["Hierarchy"] = _hierarchy("Crawl_02", ("Heart Piece", 20.0, 4.5), ("Parent", 2.25, 0.5))
     return [
@@ -51,7 +57,9 @@ def _persistent_bools() -> list[dict]:
         _bool("Collectable Item Pickup", "Hang_10", "Psalm Cylinder Hang", details="Deparent"),
         _bool("Breakable Wall", "Crawl_02", details="breakable_wall_v2"),
         _bool("Collectable Item Pickup", "Library_02", "Pale_Oil"),  # Inaccessible
-        _bool("Collectable Item Pickup - Purse", "Crawl_01", "Dead Mans Purse", tests=steel_only),
+        _bool("Collectable Item Pickup - Purse", "Crawl_01", "Dead Mans Purse", tests=purse_or_satchel),
+        _bool("Collectable Item Pickup - Satchel", "Crawl_01", "Shell Satchel", tests=purse_or_satchel),
+        steel_heart,
         _bool("Silk Spool", "Nowhere", details="Bob"),  # 缺场景尺寸
     ]
 
@@ -63,6 +71,8 @@ def _data() -> dict[str, list | dict]:
                 "Hierarchy": _hierarchy("Ward_01", ("Get Map Inspect", 7.0, 8.0), persistent=False)}
     pin = {"ObtainType": "Pickup", "ItemId": "Straight Pin", "sheetName": "Tools", "linkedPDBool": None,
            "Hierarchy": _hierarchy("Bone_12", ("Other Pin", 0.0, 0.0))}
+    purse = {"ObtainType": "Pickup", "ItemId": "Dead Mans Purse", "sheetName": "Tools", "linkedPDBool": None,
+             "Hierarchy": _hierarchy("Bone_12", ("Other Purse", 0.0, 0.0))}
     relic = {"ObtainType": "Pickup", "ItemId": "Psalm Cylinder Hang", "sheetName": "CollectableRelic",
              "linkedPDBool": None, "Hierarchy": _hierarchy("Bone_12", ("Other Relic", 0.0, 0.0))}
 
@@ -81,7 +91,7 @@ def _data() -> dict[str, list | dict]:
     return {
         "persistent_bools": _persistent_bools(),
         "persistent_scenes": {f"A/{s}.unity": {"Width": w, "Height": h} for s, (w, h) in SCENE_SIZES.items()},
-        "item_locations": [grub, ward_map, pin, relic],
+        "item_locations": [grub, ward_map, pin, purse, relic],
         "item_fsm_actions": [flea("Flea Rescue Sleeping", "Dust_12"), flea("Giant Flea", "Arborium_08")],
         "shops": [shop], "playmakers": [], "tracker_markers": [], "rosary_caches": caches,
         "geo_rocks": [rock], "breakable_misc": [], "breakable_holders": [],
@@ -95,6 +105,7 @@ def _expectations() -> dict[tuple[str, str], tuple[str, str, int]]:
         ("Crawl_09", "Collectable Item Pickup"): ("MemoryLocket", "PersistentBool", 0),
         ("Tut_01", "Collectable Item Pickup"): ("Rosary", "PersistentBool", 0),
         ("Bone_16", "Collectable Item Pickup"): ("Tool", "PersistentBool", 0),
+        ("Crawl_01", "Collectable Item Pickup - Purse"): ("Tool", "PersistentBool", 0),
         ("Hang_10", "Collectable Item Pickup"): ("Relic", "PersistentBool", 0),
         ("Ward_04", "Silk Grub Large Cocoon"): ("SilkEater", "PersistentBool", 0),
         ("Ward_01", "HasWardMap"): ("Collectable", "PlayerDataBool", 0x2F9),
@@ -121,6 +132,7 @@ def _check_entries(gen: ModuleType) -> list[tuple[bool, str]]:
     checks.append((heart is not None and (heart.x, heart.y) == (22.25, 5.0), "坐标应为各级相加"))
     items = {key: (e.item_check, e.item_name) for key, e in got.items() if e.item_check != "None"}
     checks.append((items == {("Bone_16", "Collectable Item Pickup"): ("ToolUnlocked", "Straight Pin"),
+                             ("Crawl_01", "Collectable Item Pickup - Purse"): ("ToolUnlocked", "Dead Mans Purse"),
                              ("Hang_10", "Collectable Item Pickup"): ("RelicCollected", "Psalm Cylinder Hang")},
                    "只有工具 / 遗物带物品判定（名字取 ActualItemId）"))
     checks.append((any("缺场景尺寸: Nowhere/Silk Spool" in s for s in skipped), "缺尺寸的应被跳过并报告"))

@@ -138,16 +138,33 @@ def item_kind(item_id: str, sheets: dict[str, str]) -> str:
     return SHEET_KINDS.get(sheets.get(item_id, ""), "Collectable")
 
 
+PERMADEATH_OFF = 0  # PermadeathModes.Off：普通模式
+
+
+def _passes_in_normal_mode(test: dict) -> bool:
+    """PlayerDataTest 的数值比较（NumTestType：0 Equal / 1 NotEqual / 2 LessThan / 3 MoreThan）在普通模式下是否成立。"""
+    value = test.get("IntValue", 0)
+    compare = {0: PERMADEATH_OFF == value, 1: PERMADEATH_OFF != value,
+               2: PERMADEATH_OFF < value, 3: PERMADEATH_OFF > value}
+    return compare.get(test.get("NumType", 0), True)
+
+
 def is_steel_soul_only(hierarchy: dict) -> bool:
-    """TryFindingCustomVisibilityTest：permadeathMode 测试的 SetOn 在链上 → 只在钢魂模式出现。"""
+    """TryFindingCustomVisibilityTest：permadeathMode 测试成立时激活 SetOn、否则激活 SetOff。
+
+    按普通模式求值：不激活的那一支在链上 → 只在钢魂模式出现。数据里三种写法都有：
+    "== Off" 时 SetOn 是普通模式（Regular / Purse），"> Off" 时 SetOn 是钢魂（Steel）。
+    """
     names = {t["Controls"]["Name"] for t in hierarchy["Transforms"]}
     for transform in hierarchy["Transforms"]:
         for test in transform["Controls"].get("PlayerDataTests") or []:
             if test.get("FieldName") != "permadeathMode":
                 continue
-            if test.get("SetOn") in names:
+            passes = _passes_in_normal_mode(test)
+            steel, normal = (test.get("SetOff"), test.get("SetOn")) if passes else (test.get("SetOn"), test.get("SetOff"))
+            if steel in names:
                 return True
-            if test.get("SetOff") in names:
+            if normal in names:
                 return False
     return False
 
