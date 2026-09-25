@@ -9,7 +9,7 @@ from collections.abc import Iterator
 
 import collectibles_tables as tables
 from collectibles_rules import (CURRENCY_KINDS, Candidate, first_name, is_steel_soul_only, item_fields, item_kind,
-                                make_candidate, sprite_name)
+                                make_candidate, saved_check, sprite_name)
 
 UNEXPRESSIBLE = "判定只能靠运行时物品状态（ToolItem/Materium/Memento 等），4 种 CheckKind 无法表达"
 KEY_ITEMS_EXCLUDED = frozenset({"Ward Key", "Simple Key", "Dock Demo Key"})
@@ -33,7 +33,7 @@ def _location_selected(loc: dict) -> bool:
 
 
 def from_item_locations(locations: list[dict], sheets: dict[str, str], skipped: list[str]) -> list[Candidate]:
-    """拾取点本身带持久布尔就用它（Id = 首个 transform 名），否则退到 linkedPDBool。"""
+    """拾取点本身持久就用它记状态的地方（saved_check），否则退到 linkedPDBool。"""
     found: list[Candidate] = []
     for loc in locations:
         hierarchy, item = loc["Hierarchy"], loc["ItemId"]
@@ -46,7 +46,8 @@ def from_item_locations(locations: list[dict], sheets: dict[str, str], skipped: 
         extra = {"source": "item_locations", "icon": sprite_name(loc.get("TextureAssetPath")),
                  **item_fields(kind, item, sheets)}
         if hierarchy["Transforms"][0]["Controls"]["Persistent"]:
-            found.append(make_candidate(hierarchy, first_name(hierarchy), kind, "PersistentBool", **extra))
+            check, saved_id = saved_check(hierarchy)
+            found.append(make_candidate(hierarchy, saved_id, kind, check, **extra))
         elif linked:
             found.append(make_candidate(hierarchy, linked, kind, "PlayerDataBool", **extra))
         else:

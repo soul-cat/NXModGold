@@ -73,6 +73,17 @@ def first_name(hierarchy: dict) -> str:
     return hierarchy["Transforms"][0]["Controls"]["Name"]
 
 
+def saved_check(hierarchy: dict) -> tuple[str, str]:
+    """拾取点被捡起后游戏把状态记在哪：(CheckKind, persistent_id)。
+
+    首个 transform 带 CustomBoolFlag 时记在 PlayerData 的这个 bool 上，SceneData 里同名的持久布尔
+    一直是 false（实机存档：Dust_06 的 Collectable Item SimpleKey 为 false、CollectedDustCageKey 为 true）；
+    否则记在 SceneData 持久布尔，Id = 首个 transform 名。
+    """
+    flag = hierarchy["Transforms"][0]["Controls"].get("CustomBoolFlag") or ""
+    return ("PlayerDataBool", flag) if flag else ("PersistentBool", first_name(hierarchy))
+
+
 def make_candidate(hierarchy: dict, persistent_id: str, kind: str, check: str, **extra: object) -> Candidate:
     """extra 可带 scene（覆盖 CleanScenePath）、threshold、source、icon，以及 item_fields() 的结果。"""
     x, y = world_position(hierarchy)
@@ -301,7 +312,9 @@ def from_persistent_bools(records: list[dict], sheets: dict[str, str]) -> tuple[
         kind = bool_record_kind(record, sheets)
         if kind is None:
             continue
-        candidate = make_candidate(record["Hierarchy"], record["Id"], kind, "PersistentBool",
+        check, saved_id = saved_check(record["Hierarchy"])
+        persistent_id = saved_id if check == "PlayerDataBool" else record["Id"]
+        candidate = make_candidate(record["Hierarchy"], persistent_id, kind, check,
                                    source="persistent_bools", icon=sprite_name(record.get("TextureAssetPath")),
                                    **item_fields(kind, record.get("ActualItemId") or record["Details"], sheets))
         (uncounted if is_hidden_from_count(record) else counted).append(candidate)

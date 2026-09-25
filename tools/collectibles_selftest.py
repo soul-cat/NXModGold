@@ -12,9 +12,10 @@ import collectibles_tables as tables
 
 SCENE_SIZES = {"Crawl_02": (30, 150), "Crawl_09": (40, 60), "Tut_01": (80, 40), "Ward_04": (50, 50),
                "Ward_01": (60, 60), "Dust_12": (70, 30), "Arborium_08": (90, 90), "Bonetown": (120, 80),
-               "Hang_01": (100, 50), "Bone_16": (60, 40), "Crawl_01": (50, 50), "Hang_10": (92, 48)}
+               "Hang_01": (100, 50), "Bone_16": (60, 40), "Crawl_01": (50, 50), "Hang_10": (92, 48),
+               "Dust_06": (30, 190)}
 PD_FIELDS = {"SavedFlea_Dust_12": 0x81A, "tamedGiantFlea": 0x774, "HasWardMap": 0x2F9,
-             "PurchasedBonebottomHeartPiece": 0x396}
+             "PurchasedBonebottomHeartPiece": 0x396, "CollectedDustCageKey": 0x7A0}
 FAKE_DUMP = """// Namespace:
 public class PlayerData : PlayerDataBase // TypeDefIndex: 1
 {
@@ -28,7 +29,8 @@ def _hierarchy(scene: str, *chain: tuple[str, float, float], **controls: object)
     transforms = [
         {"LocalPosition": {"X": x, "Y": y},
          "Controls": {"Name": name, "Enabled": controls.get("enabled", True),
-                      "Persistent": controls.get("persistent", True), "PlayerDataTests": controls.get("tests", [])}}
+                      "Persistent": controls.get("persistent", True), "PlayerDataTests": controls.get("tests", []),
+                      "CustomBoolFlag": controls.get("custom_bool", "")}}
         for name, x, y in chain
     ]
     return {"CleanScenePath": scene, "ActualScenePath": f"A/{scene}.unity", "BundleName": "", "Transforms": transforms}
@@ -57,6 +59,8 @@ def _persistent_bools() -> list[dict]:
         _bool("Collectable Item Pickup", "Hang_10", "Psalm Cylinder Hang", details="Deparent"),
         _bool("Breakable Wall", "Crawl_02", details="breakable_wall_v2"),
         _bool("Collectable Item Pickup", "Library_02", "Pale_Oil"),  # Inaccessible
+        # 同 Dust_06 实际数据：拾取点带 CustomBoolFlag，捡起后记在 PlayerData 上
+        _bool("Collectable Item SimpleKey", "Dust_06", "Simple Key", custom_bool="CollectedDustCageKey"),
         _bool("Collectable Item Pickup - Purse", "Crawl_01", "Dead Mans Purse", tests=purse_or_satchel),
         _bool("Collectable Item Pickup - Satchel", "Crawl_01", "Shell Satchel", tests=purse_or_satchel),
         steel_heart,
@@ -106,6 +110,7 @@ def _expectations() -> dict[tuple[str, str], tuple[str, str, int]]:
         ("Tut_01", "Collectable Item Pickup"): ("Rosary", "PersistentBool", 0),
         ("Bone_16", "Collectable Item Pickup"): ("Tool", "PersistentBool", 0),
         ("Crawl_01", "Collectable Item Pickup - Purse"): ("Tool", "PersistentBool", 0),
+        ("Dust_06", "CollectedDustCageKey"): ("Collectable", "PlayerDataBool", 0x7A0),
         ("Hang_10", "Collectable Item Pickup"): ("Relic", "PersistentBool", 0),
         ("Ward_04", "Silk Grub Large Cocoon"): ("SilkEater", "PersistentBool", 0),
         ("Ward_01", "HasWardMap"): ("Collectable", "PlayerDataBool", 0x2F9),
