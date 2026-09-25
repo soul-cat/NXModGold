@@ -10,7 +10,8 @@
 //     换成游戏自带图标（map_icons.hpp）；图标没找到时退回按分类染色的圆点。
 //   - 定位：GetMapZoneFromSceneName → GetSceneInfo → GetMapPosition（游戏放尸体标记同款）。
 //     只给要显示的标记定位，每个标记在一次缓存生命期内只定位一次（场景变回未绘制后作废）。
-//   - 显隐：地图标记开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
+//   - 显隐：地图标记开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）
+//     && 跳蚤没有被游戏原生跳蚤图钉标着（map_native_fleas.hpp）。
 //     前两项任一关闭时只把已建的标记全隐藏，不做任何查询。SetActive 只在和上次设的不同时才调。
 //   - 刷新前先调 GameManager.SaveLevelState：游戏平时只在离开房间时把房间内物品状态写进 SceneData，
 //     不调的话在同一房间捡完东西马上开图，图标还在。
@@ -145,7 +146,8 @@ inline void fullRefresh(MarkerState& state, const MapParts& parts, RefreshHook h
   RefreshStats stats;
   stats.created = std::exchange(state.unreportedCreated, 0);
   state.scenes.beginRefresh();
-  const RefreshContext ctx{state, parts.gameMap, wantsIcons ? &icons : nullptr};
+  const NativeFleaPins nativeFleas = collectNativeFleaPins(parts.gameMap);
+  const RefreshContext ctx{state, parts.gameMap, wantsIcons ? &icons : nullptr, nativeFleas};
   for (size_t i = 0; i < COLLECTIBLE_COUNT; ++i) updateMarker(ctx, i, stats);
   logRefresh(stats, elapsedMicros(startTick), COLLECTIBLE_COUNT);
   if (wantsIcons && stats.iconless > 0) logMissingIconsOnce(state.icons);

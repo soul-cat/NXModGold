@@ -34,15 +34,16 @@ struct RefreshStats {
   int visible = 0;
   int iconless = 0;
   int noAreaMap = 0;
+  int nativePin = 0;  // 跳蚤标记与游戏原生跳蚤图钉重复而隐藏
   int visibleByKind[COLLECTIBLE_KIND_COUNT] = {};
 };
 static_assert(std::has_unique_object_representations_v<RefreshStats>, "logRefresh 用 memcmp 比较，不能有填充字节");
 
 inline void logStats(const RefreshStats& stats, uint64_t micros, size_t total) {
   Logging.Log("[sshud] map: created=%d visible=%d collected=%d unmapped=%d noAreaMap=%d unplaceable=%d "
-              "iconless=%d of %zu (%llu us)",
+              "nativePin=%d iconless=%d of %zu (%llu us)",
               stats.created, stats.visible, stats.collected, stats.unmapped, stats.noAreaMap, stats.unplaceable,
-              stats.iconless, total, static_cast<unsigned long long>(micros));
+              stats.nativePin, stats.iconless, total, static_cast<unsigned long long>(micros));
   for (size_t kind = 0; kind < COLLECTIBLE_KIND_COUNT; ++kind) {
     if (stats.visibleByKind[kind] > 0) {
       Logging.Log("[sshud] map: visible %s=%d", COLLECTIBLE_KIND_NAMES[kind], stats.visibleByKind[kind]);

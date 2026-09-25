@@ -5,6 +5,7 @@
 #include "map_collected.hpp"
 #include "map_icons.hpp"
 #include "map_marker_state.hpp"
+#include "map_native_fleas.hpp"
 #include "map_refresh_log.hpp"
 
 namespace sshud::map {
@@ -33,9 +34,10 @@ struct RefreshContext {
   MarkerState& state;
   ui::ManagedObject gameMap;
   const IconSet* icons;  // null = 本次不处理图标
+  const NativeFleaPins& nativeFleas;
 };
 
-enum class MarkerFate : uint8_t { Visible, Unplaceable, Unmapped, NoAreaMap, Collected };
+enum class MarkerFate : uint8_t { Visible, Unplaceable, Unmapped, NoAreaMap, Collected, NativePin };
 
 /// 不用算位置就能判定的隐藏原因；都不是时返回 Visible
 inline MarkerFate fateBeforePlacing(const CollectibleEntry& entry, const EntryStrings& strings,
@@ -74,7 +76,21 @@ inline void countFate(RefreshStats& stats, MarkerFate fate, CollectibleKind kind
     case MarkerFate::Collected:
       ++stats.collected;
       return;
+    case MarkerFate::NativePin:
+      ++stats.nativePin;
+      return;
   }
+}
+
+/// 要显示的跳蚤标记若与游戏原生跳蚤图钉重复（map_native_fleas.hpp），改为隐藏
+inline MarkerFate dropNativeDuplicate(const RefreshContext& ctx, size_t i, MarkerFate fate) {
+  const CollectibleEntry& entry = COLLECTIBLES[i];
+  if (fate != MarkerFate::Visible || entry.kind != CollectibleKind::Flea || ctx.nativeFleas.count == 0) return fate;
+  const ui::Vector3 position = call<ui::Vector3>(TR_GETPOSITION, transformOf(ctx.state.block.at(i)));
+  const float distance = ctx.nativeFleas.nearest(entry.scene, position);
+  if (distance < NATIVE_FLEA_MATCH_DISTANCE) return MarkerFate::NativePin;
+  logUnmatchedFleaOnce(i, entry.scene, distance);
+  return fate;
 }
 
 inline void updateMarker(const RefreshContext& ctx, size_t i, RefreshStats& stats) {
@@ -86,7 +102,8 @@ inline void updateMarker(const RefreshContext& ctx, size_t i, RefreshStats& stat
   stats.iconless += hasIcon ? 0 : 1;
   const EntryStrings& strings = ctx.state.strings.get(i, entry);
   const SceneInfo& info = ctx.state.scenes.get(i, ctx.gameMap, entry.scene, strings.scene);
-  const MarkerFate fate = placeIfNeeded(ctx, i, info, fateBeforePlacing(entry, strings, info));
+  const MarkerFate placed = placeIfNeeded(ctx, i, info, fateBeforePlacing(entry, strings, info));
+  const MarkerFate fate = dropNativeDuplicate(ctx, i, placed);
   ctx.state.block.setMarkerActive(i, fate == MarkerFate::Visible);
   countFate(stats, fate, entry.kind);
 }

@@ -250,6 +250,55 @@
       "field": "textField",
       "required": true,
       "_note": "行标签的 Text"
+    },
+    {
+      "name": "PD_HASPINFLEA_MARROWLANDS",
+      "class": "PlayerData",
+      "field": "hasPinFleaMarrowlands",
+      "required": true,
+      "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "PD_HASPINFLEA_MIDLANDS",
+      "class": "PlayerData",
+      "field": "hasPinFleaMidlands",
+      "required": true,
+      "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "PD_HASPINFLEA_BLASTEDLANDS",
+      "class": "PlayerData",
+      "field": "hasPinFleaBlastedlands",
+      "required": true,
+      "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "PD_HASPINFLEA_CITADEL",
+      "class": "PlayerData",
+      "field": "hasPinFleaCitadel",
+      "required": true,
+      "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "PD_HASPINFLEA_PEAKLANDS",
+      "class": "PlayerData",
+      "field": "hasPinFleaPeaklands",
+      "required": true,
+      "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "PD_HASPINFLEA_MUCKLANDS",
+      "class": "PlayerData",
+      "field": "hasPinFleaMucklands",
+      "required": true,
+      "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "MAPPIN_PARENTSCENE",
+      "class": "MapPin",
+      "field": "parentScene",
+      "required": true,
+      "_note": "GameMapScene，CanBeActive 里 GetComponentInParent 懒赋值，可能为空"
     }
   ],
   "methods": [
