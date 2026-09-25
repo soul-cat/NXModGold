@@ -60,6 +60,7 @@ tests/test_hud_model
 tests/test_toggles
 tests/test_map_timing
 tests/test_map_refresh_plan
+tests/test_options_menu_model
 
 # --- C# 工具产物 ---
 bin/
