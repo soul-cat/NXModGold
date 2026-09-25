@@ -21,6 +21,7 @@
 | BOSS 血条 | 最大血量 > 105 的敌人改画屏幕底部居中的 BOSS 条（带猎人日志名字），多个 BOSS 向上堆叠；BOSS 大标题出现（`DisplayBossTitle`）时就登记，不等第一刀；不按时间隐藏，死亡 / 停用 / 离开场景才消失。外框与填充是作者自绘贴图 `exl/assets/boss_frame.png` / `boss_fill.png` | 同上 |
 | 地图收集物标注 | 571 个收集物（18 类）在快速地图与大地图上用游戏自带图标标出；区域地图没买、房间没绘制、已收集的都不显示 | `Completionist Map` |
 | 游戏内开关面板 | 按住 R3 弹出中文面板，按住期间方向键切换功能，设置存 SD 卡 | — |
+| 原生选项页开关 | 「选项 → 游戏」页末尾多出四行开/关，外观、字体、手柄导航与原生选项一致，与 R3 面板共用设置 | — |
 | SD 日志 | `SD:/config/sshud/log.txt`，每次启动覆盖 | — |
 | 存档导出 / 导入 | 触发文件驱动，把整个存档导出到 SD，或从 SD 导入 `user1..4.dat` | — |
 
@@ -49,8 +50,11 @@ Atmosphère 的金手指 VM 只能读写内存，没有绘图能力；血条和�
   ├─ CameraController.LateUpdate     每帧：首帧挂 SD 日志 → 存档导出 → 存档导入；读手柄（R3 面板）；
   │                                  扫 BOSS；确保 PlayMakerGUI 存在
   ├─ PlayMakerGUI.OnGUI              Repaint 事件里用 Unity IMGUI 画 BOSS 条 / 敌人血条 / 飘字 / 开关面板
-  └─ GameMap.SetupMapMarkers         开图时刷新收集物标记
-     GameMap.EnableUnlockedAreas     （两处都刷新，见 HANDOFF）
+  ├─ GameMap.SetupMapMarkers         开图时刷新收集物标记
+  │  GameMap.EnableUnlockedAreas     （两处都刷新，见 HANDOFF）
+  ├─ UIManager.UIGoToGameOptionsMenu 打开「选项 → 游戏」前：首次克隆插入四个开关行，之后刷新行上的值
+  ├─ MenuButtonList.SetupActive      页面激活重排导航后，把四行接进上下导航
+  └─ MenuOptionHorizontal.UpdateSetting  左右切换后：是我们的行就改开关、写回 config.ini
 ```
 
 所有 hook 体都在 Unity 主线程上跑，`HudModel` 等共享状态不加锁。
@@ -139,6 +143,7 @@ make -C tests test     # ASan + UBSan
 |---|---|
 | `test_hud_model` | 槽位复用与淘汰、隐藏延时、BOSS 条不超时、BOSS 门槛、布局、飘字进度与回收 |
 | `test_toggles` | R3 面板输入（按住、方向映射、按下沿、同时按、松开）、`config.ini` 格式化与解析 |
+| `test_options_menu_model` | 原生选项页：从本地化键认出「开」是第几项、按游戏语言选标签、UTF-16 → ASCII 日志转换 |
 | `test_map_timing` | 地图刷新耗时的批量汇总 |
 
 工具自检：`./tools/nsotool.py selftest`、`./tools/40-patch-npdm.py selftest`、
@@ -158,7 +163,12 @@ Ryujinx：右键游戏 →「打开 Atmosphere Mods 目录」，放到 `<该目�
 
 ## 使用
 
-### 开关面板
+### 开关
+
+两处都能改，共用同一份 `config.ini`：
+
+- **原生选项页**：「选项 → 游戏」页最后四行（小怪血条 / BOSS 血条 / 伤害数字 / 地图收集物），左右切换即生效。游戏语言为简体中文时显示中文标签，否则英文；开 / 关沿用游戏自己的本地化文字。
+- **R3 面板**：游戏中随时可用，见下。
 
 按住 R3（右摇杆按下）弹出面板，按住期间按方向键切换，松开 R3 面板消失：
 
