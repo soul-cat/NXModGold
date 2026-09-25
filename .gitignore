@@ -67,6 +67,8 @@ exl/program/collectibles.gen.h
 tests/test_layout
 tests/test_hud_model
 tests/test_toggles
+tests/test_map_timing
+tests/*.dSYM/
 
 # --- C# 工具产物 ---
 bin/

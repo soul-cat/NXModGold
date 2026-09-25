@@ -10,6 +10,7 @@
 
 #include "map_calls.hpp"
 #include "map_markers_data.hpp"
+#include "map_strings.hpp"
 
 namespace sshud::map {
 
@@ -27,7 +28,7 @@ inline const void* methodInfoFromSlot(uintptr_t slotRva, bool& isInitialized) {
 
 /// SceneData 某个集合里 (scene, id) 的记录；查不到返回 null
 inline const uint8_t* findSceneRecord(uintptr_t collectionField, uintptr_t tryGetValueRva, uintptr_t slotRva,
-                                      bool& isSlotInitialized, const CollectibleEntry& entry) {
+                                      bool& isSlotInitialized, const EntryStrings& strings) {
   const void* sceneData = ui::mainFunction<const void* (*)(const void*)>(SD_GETINSTANCE)(nullptr);
   if (sceneData == nullptr) return nullptr;
   const void* collection = ui::readField<const void*>(sceneData, collectionField);
@@ -35,20 +36,20 @@ inline const uint8_t* findSceneRecord(uintptr_t collectionField, uintptr_t tryGe
   const uint8_t* record = nullptr;
   const bool found = ui::mainFunction<bool (*)(const void*, ui::ManagedString, ui::ManagedString, const uint8_t**,
                                                const void*)>(tryGetValueRva)(
-      collection, managedString(entry.scene), managedString(entry.persistentId), &record,
+      collection, strings.scene, strings.persistentId, &record,
       methodInfoFromSlot(slotRva, isSlotInitialized));
   return found ? record : nullptr;
 }
 
-inline const uint8_t* findBoolRecord(const CollectibleEntry& entry) {
+inline const uint8_t* findBoolRecord(const EntryStrings& strings) {
   static bool s_slotReady = false;
-  return findSceneRecord(SD_PERSISTENTBOOLS, PDC_BOOL_TRYGETVALUE, PDC_BOOL_TRYGETVALUE_MI, s_slotReady, entry);
+  return findSceneRecord(SD_PERSISTENTBOOLS, PDC_BOOL_TRYGETVALUE, PDC_BOOL_TRYGETVALUE_MI, s_slotReady, strings);
 }
 
 /// persistentInts 与 geoRocks 同类型，共用一个 MethodInfo 槽
-inline const uint8_t* findIntRecord(uintptr_t collectionField, const CollectibleEntry& entry) {
+inline const uint8_t* findIntRecord(uintptr_t collectionField, const EntryStrings& strings) {
   static bool s_slotReady = false;
-  return findSceneRecord(collectionField, PDC_INT_TRYGETVALUE, PDC_INT_TRYGETVALUE_MI, s_slotReady, entry);
+  return findSceneRecord(collectionField, PDC_INT_TRYGETVALUE, PDC_INT_TRYGETVALUE_MI, s_slotReady, strings);
 }
 
 inline bool isPlayerDataFlagSet(uint32_t offset) {
@@ -56,19 +57,19 @@ inline bool isPlayerDataFlagSet(uint32_t offset) {
   return playerData != nullptr && ui::readField<bool>(playerData, offset);
 }
 
-/// 查不到记录一律当作未收集（没去过的场景本来就没有记录）
-inline bool isCollected(const CollectibleEntry& entry) {
+/// 查不到记录一律当作未收集（没去过的场景本来就没有记录）；strings 是该条目钉住的托管字符串
+inline bool isCollected(const CollectibleEntry& entry, const EntryStrings& strings) {
   switch (entry.check) {
     case CheckKind::PersistentBool: {
-      const uint8_t* record = findBoolRecord(entry);
+      const uint8_t* record = findBoolRecord(strings);
       return record != nullptr && record[PERSISTENT_BOOL_VALUE] != 0;
     }
     case CheckKind::PersistentIntAtLeast: {
-      const uint8_t* record = findIntRecord(SD_PERSISTENTINTS, entry);
+      const uint8_t* record = findIntRecord(SD_PERSISTENTINTS, strings);
       return record != nullptr && ui::readField<int32_t>(record, PERSISTENT_INT_VALUE) >= entry.threshold;
     }
     case CheckKind::GeoRockDepleted: {
-      const uint8_t* record = findIntRecord(SD_GEOROCKS, entry);
+      const uint8_t* record = findIntRecord(SD_GEOROCKS, strings);
       return record != nullptr && ui::readField<int32_t>(record, PERSISTENT_INT_VALUE) <= 0;
     }
     case CheckKind::PlayerDataBool:

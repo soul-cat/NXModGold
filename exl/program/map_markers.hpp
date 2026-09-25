@@ -9,12 +9,15 @@
 //     换成游戏自带图标（map_icons.hpp）；图标没找到时退回按分类染色的圆点。
 //   - 定位：GetMapZoneFromSceneName → GetSceneInfo → GetMapPosition（游戏放尸体标记同款）。
 //   - 显隐：地图标记开关（toggles.hpp）&& 全局 pin 开关 != None && 场景已绘制 && 未收集（map_collected.hpp）。
+//     前两项任一关闭时只把已建的标记全隐藏，不做任何查询。
 //   - 刷新前先调 GameManager.SaveLevelState：游戏平时只在离开房间时把房间内物品状态写进 SceneData，
 //     不调的话在同一房间捡完东西马上开图，图标还在。
 //
 // 托管对象全部"现取现用"，不跨帧持有托管指针（原生持有的引用 GC 看不见）：
 // 我们的标记在 markerParent 下是连续一段子节点，每次刷新 Find("sshud_pin_0")
-// 取起点，其余按下标 GetChild —— O(n)，几百个标记也不会卡开图。
+// 取起点，其余按下标 GetChild —— O(n)。
+// 开图卡顿相关：查询用的托管字符串钉住复用（map_strings.hpp）；日志只在结果变化时写，
+// 耗时每 TIMING_LOG_INTERVAL 次刷新汇总一行（map_timing.hpp）。
 
 #pragma once
 
@@ -22,6 +25,8 @@
 #include "map_collected.hpp"
 #include "map_icons.hpp"
 #include "map_markers_data.hpp"
+#include "map_strings.hpp"
+#include "map_refresh_log.hpp"
 #include "toggles.hpp"
 
 #if __has_include("collectibles.gen.h")
@@ -57,8 +62,7 @@ struct SceneInfo {
   bool isDrawn = false;   // 地图块在层级里激活：没买区域地图时游戏不激活，已绘制的房间也不画
 };
 
-inline SceneInfo querySceneInfo(ui::ManagedObject gameMap, const char* sceneName) {
-  const ui::ManagedString name = managedString(sceneName);
+inline SceneInfo querySceneInfo(ui::ManagedObject gameMap, const char* sceneName, ui::ManagedString name) {
   const int32_t zone = call<int32_t>(GM_GETMAPZONEFROMSCENE, gameMap, name);
   SceneInfo info;
   info.name = sceneName;
@@ -71,12 +75,12 @@ inline SceneInfo querySceneInfo(ui::ManagedObject gameMap, const char* sceneName
 /// 一次刷新内的场景信息缓存（同一场景的多个收集物只查一次）
 class SceneCache {
  public:
-  const SceneInfo& get(ui::ManagedObject gameMap, const char* sceneName) {
+  const SceneInfo& get(ui::ManagedObject gameMap, const char* sceneName, ui::ManagedString sceneString) {
     for (int i = 0; i < count_; ++i) {
       if (std::strcmp(entries_[i].name, sceneName) == 0) return entries_[i];
     }
     SceneInfo& slot = entries_[next_];
-    slot = querySceneInfo(gameMap, sceneName);
+    slot = querySceneInfo(gameMap, sceneName, sceneString);
     next_ = (next_ + 1) % SCENE_CACHE_SIZE;
     count_ = count_ < SCENE_CACHE_SIZE ? count_ + 1 : count_;
     return slot;
@@ -121,22 +125,11 @@ inline ui::ManagedObject createMarker(ui::ManagedObject tpl, ui::ManagedObject p
 }
 
 // ---------------------------------------------------------------- 刷新
-struct RefreshStats {
-  int created = 0;
-  int unplaceable = 0;
-  int unmapped = 0;
-  int collected = 0;
-  int visible = 0;
-  int iconless = 0;
-  int noAreaMap = 0;
-  int visibleByKind[COLLECTIBLE_KIND_COUNT] = {};
-};
-
 inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, const CollectibleEntry& entry,
-                         bool pinsEnabled, SceneCache& scenes, RefreshStats& stats) {
-  const SceneInfo& info = scenes.get(gameMap, entry.scene);
+                         const EntryStrings& strings, SceneCache& scenes, RefreshStats& stats) {
+  const SceneInfo& info = scenes.get(gameMap, entry.scene, strings.scene);
   const Vector2 pos = mapPositionOf(gameMap, entry, info);
-  bool isVisible = pinsEnabled;
+  bool isVisible = true;
   if (pos.x <= NO_MAP_POSITION) {
     ++stats.unplaceable;
     isVisible = false;
@@ -150,7 +143,7 @@ inline void updateMarker(ui::ManagedObject gameMap, ui::ManagedObject marker, co
     } else if (!info.isDrawn) {
       ++stats.noAreaMap;
       isVisible = false;
-    } else if (isCollected(entry)) {
+    } else if (isCollected(entry, strings)) {
       ++stats.collected;
       isVisible = false;
     }
@@ -215,41 +208,41 @@ inline void logMissingIcons() {
   }
 }
 
-inline void logRefresh(const RefreshStats& stats, bool pinsEnabled) {
-  Logging.Log("[sshud] map: pins=%d created=%d visible=%d collected=%d unmapped=%d noAreaMap=%d unplaceable=%d "
-              "iconless=%d of %zu",
-              pinsEnabled ? 1 : 0, stats.created, stats.visible, stats.collected, stats.unmapped, stats.noAreaMap,
-              stats.unplaceable, stats.iconless, COLLECTIBLE_COUNT);
-  for (size_t kind = 0; kind < COLLECTIBLE_KIND_COUNT; ++kind) {
-    if (stats.visibleByKind[kind] > 0) {
-      Logging.Log("[sshud] map: visible %s=%d", COLLECTIBLE_KIND_NAMES[kind], stats.visibleByKind[kind]);
-    }
-  }
-}
-
 /// 让当前房间的持久物品把状态写进 SceneData（与离开房间时相同）
 inline void saveCurrentRoomState() {
   ui::ManagedObject gameManager = call<ui::ManagedObject>(GAMEMGR_GETINSTANCE);
   if (ui::isAlive(gameManager)) call<void>(GAMEMGR_SAVELEVELSTATE, gameManager);
 }
 
+/// 标记关闭（我们的开关或游戏的全局 pin 开关）：只把已建的标记全隐藏，不做任何查询
+inline void hideMarkers(ui::ManagedObject parent) {
+  const int32_t start = firstMarkerIndex(parent);
+  if (start < 0) return;
+  for (size_t i = 0; i < COLLECTIBLE_COUNT; ++i) {
+    setActive(gameObjectOf(childAt(parent, start + static_cast<int32_t>(i))), false);
+  }
+}
+
 inline void refreshMarkers(ui::ManagedObject gameMap) {
-  saveCurrentRoomState();
+  const uint64_t startTick = systemTick();
   ui::ManagedObject parent = ui::readField<ui::ManagedObject>(gameMap, GM_MARKERPARENT);
   ui::ManagedObject tpl = markerTemplate(gameMap);
   if (!ui::isAlive(parent) || !ui::isAlive(tpl)) {
     Logging.Log("[sshud] map: no marker template/parent (tpl=%p parent=%p)", tpl, parent);
     return;
   }
+  if (!toggles::g_settings.isEnabled(toggles::Feature::MapMarkers) || pinVisibilityState() == PIN_STATE_NONE) {
+    return hideMarkers(parent);
+  }
+  saveCurrentRoomState();
   const int32_t start = firstMarkerIndex(parent);
   if (start < 0) iconProgress() = IconProgress{};
   const bool wantsIcons = iconProgress().isPending();
   IconSet icons;  // 含托管指针，必须在栈上（GC 会扫栈）
   if (wantsIcons) loadPendingIcons(icons, gameMap, tpl);
-  const bool pinsEnabled =
-      toggles::g_settings.isEnabled(toggles::Feature::MapMarkers) && pinVisibilityState() != PIN_STATE_NONE;
   RefreshStats stats;
   static SceneCache s_scenes;  // 大对象不放栈上；每次刷新重置（场景对象游戏自己持有，不怕 GC）
+  static PinnedEntryStrings<COLLECTIBLE_COUNT> s_strings;
   s_scenes = SceneCache{};
   for (size_t i = 0; i < COLLECTIBLE_COUNT; ++i) {
     ui::ManagedObject marker = start >= 0 ? gameObjectOf(childAt(parent, start + static_cast<int32_t>(i)))
@@ -259,9 +252,9 @@ inline void refreshMarkers(ui::ManagedObject gameMap) {
     bool& hasIcon = iconProgress().hasIcon[i];
     if (wantsIcons && !hasIcon) hasIcon = applyIcon(marker, icons.resolve(COLLECTIBLES[i]));
     stats.iconless += hasIcon ? 0 : 1;
-    updateMarker(gameMap, marker, COLLECTIBLES[i], pinsEnabled, s_scenes, stats);
+    updateMarker(gameMap, marker, COLLECTIBLES[i], s_strings.get(i, COLLECTIBLES[i]), s_scenes, stats);
   }
-  logRefresh(stats, pinsEnabled);
+  logRefresh(stats, elapsedMicros(startTick), COLLECTIBLE_COUNT);
   if (wantsIcons && stats.iconless > 0) logMissingIcons();
 }
 #endif
