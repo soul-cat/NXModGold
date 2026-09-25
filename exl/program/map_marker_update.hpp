@@ -87,7 +87,7 @@ inline MarkerFate dropNativeDuplicate(const RefreshContext& ctx, size_t i, Marke
   const CollectibleEntry& entry = COLLECTIBLES[i];
   if (fate != MarkerFate::Visible || entry.kind != CollectibleKind::Flea || ctx.nativeFleas.count == 0) return fate;
   const ui::Vector3 position = call<ui::Vector3>(TR_GETPOSITION, transformOf(ctx.state.block.at(i)));
-  const float distance = ctx.nativeFleas.nearest(entry.scene, position);
+  const float distance = ctx.nativeFleas.nearest(entry.persistentId, position);
   if (distance < NATIVE_FLEA_MATCH_DISTANCE) return MarkerFate::NativePin;
   logUnmatchedFleaOnce(i, entry.scene, distance);
   return fate;

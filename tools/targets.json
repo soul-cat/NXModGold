@@ -294,13 +294,6 @@
       "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
     },
     {
-      "name": "MAPPIN_PARENTSCENE",
-      "class": "MapPin",
-      "field": "parentScene",
-      "required": true,
-      "_note": "GameMapScene，CanBeActive 里 GetComponentInParent 懒赋值，可能为空"
-    },
-    {
       "name": "PD_GOURMANDGIVENMEAT",
       "class": "PlayerData",
       "field": "GourmandGivenMeat",
