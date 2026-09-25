@@ -18,7 +18,7 @@ struct TextImage {
 
 struct MenuTextures {
   TextImage title;
-  TextImage rows[toggles::FEATURE_COUNT];  // 顺序同 toggles::FEATURES
+  TextImage rows[toggles::PANEL_FEATURE_COUNT];  // 顺序同 toggles::FEATURES
   TextImage on;
   TextImage off;
 };
@@ -36,7 +36,7 @@ inline bool isUsable(const MenuTextures& textures) {
          unity::isAlive(textures.off.texture);
 }
 
-static_assert(toggles::FEATURE_COUNT == 4, "menuTextures() 按 FEATURES 顺序逐行建贴图，增删功能要同步改");
+static_assert(toggles::PANEL_FEATURE_COUNT == 4, "menuTextures() 按 FEATURES 顺序逐行建贴图，增删功能要同步改");
 
 /// 第一次用时建，被卸掉了就只重建失效的；失败后按 RetryThrottle 节流（now：unscaledTime）
 inline const MenuTextures* menuTextures(float now) {

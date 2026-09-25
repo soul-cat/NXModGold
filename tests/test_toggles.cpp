@@ -111,9 +111,10 @@ static void testMenuReleaseWithoutOpen() {
 // ---------------------------------------------------------------- Settings
 
 static void testSettingsDefaultsAndFlip() {
-  std::printf("test: 默认全开，flip 翻转，flip(None) 无操作\n");
+  std::printf("test: HUD 功能默认开、任务作弊默认关，flip 翻转，flip(None) 无操作\n");
   Settings settings;
-  for (size_t i = 0; i < FEATURE_COUNT; ++i) CHECK(settings.isEnabled(static_cast<Feature>(i)));
+  for (size_t i = 0; i < PANEL_FEATURE_COUNT; ++i) CHECK(settings.isEnabled(static_cast<Feature>(i)));
+  CHECK(!settings.isEnabled(Feature::SkipGourmandMeat));
   settings.flip(Feature::BossBar);
   CHECK(!settings.isEnabled(Feature::BossBar));
   CHECK(settings.isEnabled(Feature::EnemyBars) && settings.isEnabled(Feature::DamageNumbers) &&
@@ -133,11 +134,12 @@ static void testFormatSettingsDefaults() {
   char text[CONFIG_TEXT_CAPACITY];
   const size_t length = formatSettings(settings, text, sizeof(text));
   const char* expected =
-      "# sshud feature toggles: 1 = on, 0 = off (in game: hold R3 + D-pad)\n"
+      "# sshud feature toggles: 1 = on, 0 = off (in game: Options > Game, or hold R3 + D-pad)\n"
       "enemy_bars=1\n"
       "boss_bar=1\n"
       "damage_numbers=1\n"
-      "map_markers=1\n";
+      "map_markers=1\n"
+      "skip_gourmand_meat=0\n";
   CHECK(std::strcmp(text, expected) == 0);
   CHECK(length == std::strlen(expected));
 }

@@ -299,6 +299,13 @@
       "field": "parentScene",
       "required": true,
       "_note": "GameMapScene，CanBeActive 里 GetComponentInParent 懒赋值，可能为空"
+    },
+    {
+      "name": "PD_GOURMANDGIVENMEAT",
+      "class": "PlayerData",
+      "field": "GourmandGivenMeat",
+      "required": true,
+      "_note": "美食家任务（Great Gourmand）五样菜之一：肉（钟心镇信使的肉袋）"
     }
   ],
   "methods": [
@@ -1021,6 +1028,13 @@
       "required": true,
       "namespace": "UnityEngine",
       "signature_contains": "DestroyImmediate(Object obj)"
+    },
+    {
+      "name": "PD_GOURMANDQUESTACCEPTED",
+      "class": "PlayerData",
+      "method": "get_GourmandQuestAccepted",
+      "required": true,
+      "_note": "QuestManager.GetQuest(\"Great Gourmand\").IsAccepted（反汇编核实）"
     }
   ],
   "script": [

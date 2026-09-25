@@ -4,6 +4,7 @@
 //   ↑ 小怪血条   → BOSS 血条   ↓ 伤害数字   ← 地图收集物标记
 // 松开 R3 面板消失；有改动就写回 SD:/config/sshud/config.ini（每行 key=0/1）。
 // 地图标记在下次打开地图时生效（标记只在打开地图时刷新）。
+// 前 PANEL_FEATURE_COUNT 个功能 R3 面板与原生选项页都能开关；之后的（button = 0）只在原生选项页里。
 
 #pragma once
 
@@ -24,11 +25,12 @@ constexpr uint64_t BUTTON_DOWN = 1ull << 15;
 
 constexpr uint64_t MENU_HOLD = BUTTON_STICK_R;
 
-enum class Feature : uint8_t { EnemyBars, BossBar, DamageNumbers, MapMarkers, Count, None = Count };
+enum class Feature : uint8_t { EnemyBars, BossBar, DamageNumbers, MapMarkers, SkipGourmandMeat, Count, None = Count };
 constexpr size_t FEATURE_COUNT = static_cast<size_t>(Feature::Count);
+constexpr size_t PANEL_FEATURE_COUNT = 4;  // R3 面板只有四个方向键
 
 struct FeatureInfo {
-  uint64_t button;
+  uint64_t button;  // 0：R3 面板里没有
   const char* key;  // config.ini 里的键名（面板上的中文文字是贴图，见 menu_textures.hpp）
 };
 
@@ -37,16 +39,18 @@ constexpr FeatureInfo FEATURES[FEATURE_COUNT] = {
     {BUTTON_RIGHT, "boss_bar"},
     {BUTTON_DOWN, "damage_numbers"},
     {BUTTON_LEFT, "map_markers"},
+    {0, "skip_gourmand_meat"},  // 美食家任务免送肉（gourmand_skip.hpp）
 };
 
-constexpr const char* CONFIG_HEADER = "# sshud feature toggles: 1 = on, 0 = off (in game: hold R3 + D-pad)\n";
+constexpr const char* CONFIG_HEADER =
+    "# sshud feature toggles: 1 = on, 0 = off (in game: Options > Game, or hold R3 + D-pad)\n";
 constexpr size_t CONFIG_TEXT_CAPACITY = 512;
 constexpr size_t CONFIG_LINE_CAPACITY = 64;
 
 inline const FeatureInfo& infoOf(Feature feature) { return FEATURES[static_cast<size_t>(feature)]; }
 
 struct Settings {
-  bool enabled[FEATURE_COUNT] = {true, true, true, true};
+  bool enabled[FEATURE_COUNT] = {true, true, true, true, false};  // HUD 功能默认开，任务作弊默认关
 
   bool isEnabled(Feature feature) const { return enabled[static_cast<size_t>(feature)]; }
   void flip(Feature feature) {

@@ -187,14 +187,14 @@ inline void drawMenu(const Frame& frame, const toggles::Settings& settings, bool
   const float lineHeight = MENU_LINE_HEIGHT * scale;
   const float contentWidth = menuContentWidth(*textures) * scale;
   const float boxX = (frame.width - contentWidth) * 0.5f - padding;
-  const float lineCount = static_cast<float>(toggles::FEATURE_COUNT + 1);  // 标题 + 每个功能一行
+  const float lineCount = static_cast<float>(toggles::PANEL_FEATURE_COUNT + 1);  // 标题 + 每个功能一行
   ui::setGuiColor(COLOR_MENU_BG);
   ui::drawTexture({boxX, MENU_TOP * scale, contentWidth + 2.0f * padding, lineHeight * lineCount + 2.0f * padding},
                   frame.white);
   Rect line{boxX + padding, MENU_TOP * scale + padding + (lineHeight - MENU_TEXT_HEIGHT * scale) * 0.5f, contentWidth,
             MENU_TEXT_HEIGHT * scale};
   drawTextImage(textures->title, line.x, line.y, line.height, COLOR_TEXT_WHITE);
-  for (size_t i = 0; i < toggles::FEATURE_COUNT; ++i) {
+  for (size_t i = 0; i < toggles::PANEL_FEATURE_COUNT; ++i) {
     line.y += lineHeight;
     drawMenuRow(*textures, i, settings.enabled[i], line);
   }
