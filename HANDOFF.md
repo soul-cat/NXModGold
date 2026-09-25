@@ -24,7 +24,7 @@
 | 地图收集物标记（快速地图 + 大地图） | 游戏自带图标，区域地图未买时隐藏（`47d4074`） |
 | 已收集物品刷新 | 同一房间刚捡的物品开图即消失（刷新前调 `GameManager.SaveLevelState`，`4a652f1`） |
 | R3 开关面板 | 中文贴图文字，设置写回 `config.ini` |
-| 原生选项页开关 | 克隆「选项 → 游戏」的开/关行插四行；实机日志：6 个原生行、布局组自动排版、缺字 0、导航接在 `BackerOption` 与 `DefaultsButton` 之间（`ff49964`）；第五行送货不损坏（hook `DeliveryQuestItem.TakeHitForItem` / `BreakAllInternal`，待实机验证：快速旅行是否另有状态机拦截） |
+| 原生选项页开关 | 克隆「选项 → 游戏」的开/关行插四行；实机日志：6 个原生行、布局组自动排版、缺字 0、导航接在 `BackerOption` 与 `DefaultsButton` 之间（`ff49964`）；第五行 R3 快捷面板开关；第六行送货不损坏（hook `DeliveryQuestItem.TakeHitForItem` / `BreakAllInternal`，实机日志：挨打、危险地形重生、计时掉耐久均被拦下，钟兽 / 电梯可正常乘坐） |
 | 原生跳蚤图钉去重 | 实机日志：6 组 29 个图钉，名字即跳蚤存档键，`parentScene` 全空；按名字匹配，重复的 6 个跳蚤标记隐藏（`e8337ab`） |
 | 存档导入 / 导出 | 导入 `user1..4.dat`（含备份与 `.done` 改名）；导出整个 `save:/` |
 | 开图卡顿修复 | 原来每次开图约 330 ms 卡顿；场景查询改为跨刷新缓存（`c7dded7`），托管字符串钉住复用、日志只在变化时写（`1b24c4d`） |

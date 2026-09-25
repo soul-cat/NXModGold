@@ -25,7 +25,9 @@ constexpr uint64_t BUTTON_DOWN = 1ull << 15;
 
 constexpr uint64_t MENU_HOLD = BUTTON_STICK_R;
 
-enum class Feature : uint8_t { EnemyBars, BossBar, DamageNumbers, MapMarkers, ProtectDelivery, Count, None = Count };
+enum class Feature : uint8_t {
+  EnemyBars, BossBar, DamageNumbers, MapMarkers, QuickPanel, ProtectDelivery, Count, None = Count
+};
 constexpr size_t FEATURE_COUNT = static_cast<size_t>(Feature::Count);
 constexpr size_t PANEL_FEATURE_COUNT = 4;  // R3 面板只有四个方向键
 
@@ -39,6 +41,7 @@ constexpr FeatureInfo FEATURES[FEATURE_COUNT] = {
     {BUTTON_RIGHT, "boss_bar"},
     {BUTTON_DOWN, "damage_numbers"},
     {BUTTON_LEFT, "map_markers"},
+    {0, "quick_panel"},       // R3 快捷面板本身的开关（关掉后按 R3 不弹面板）
     {0, "protect_delivery"},  // 送货物品不损坏（delivery_guard.hpp）
 };
 
@@ -50,7 +53,7 @@ constexpr size_t CONFIG_LINE_CAPACITY = 64;
 inline const FeatureInfo& infoOf(Feature feature) { return FEATURES[static_cast<size_t>(feature)]; }
 
 struct Settings {
-  bool enabled[FEATURE_COUNT] = {true, true, true, true, false};  // HUD 功能默认开，送货保护默认关
+  bool enabled[FEATURE_COUNT] = {true, true, true, true, true, false};  // 送货保护默认关，其余默认开
 
   bool isEnabled(Feature feature) const { return enabled[static_cast<size_t>(feature)]; }
   void flip(Feature feature) {

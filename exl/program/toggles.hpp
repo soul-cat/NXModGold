@@ -1,5 +1,6 @@
 // 开关面板的运行时部分：每帧读手柄（nn::hid，游戏的 sdk 模块导出），喂给 MenuInput。
 // 首次调用时从 SD 读开关（toggles_config）；松开 R3 时若有改动就写回 SD。
+// 「R3 快捷面板」开关（Feature::QuickPanel，原生选项页里）关掉时整个面板停用。
 //
 // 读三种握法再按位或：Pro 手柄 / 模拟器键盘（FullKey, No1）、双 Joy-Con（JoyDual, No1）、
 // 掌机（Handheld）。没连上的握法读出来全 0，不影响结果。只读状态，不会吞掉游戏的输入。
@@ -61,6 +62,11 @@ inline void loadOnce() {
 inline void pollInput() {
   static MenuInput s_input;
   loadOnce();
+  if (!g_settings.isEnabled(Feature::QuickPanel)) {
+    g_isMenuOpen = false;
+    s_input = MenuInput{};  // 重新打开时从干净状态开始，不把关着期间按住的键当成按下沿
+    return;
+  }
   const MenuEvent event = s_input.update(currentButtons());
   g_isMenuOpen = event.isOpen;
   if (event.flipped != Feature::None) {
