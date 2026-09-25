@@ -1,16 +1,15 @@
-// exlaunch 入口 —— Silksong 血条 HUD 的 exefs 注入版（Ryujinx 与 Atmosphère 通用）。
+// exlaunch 入口 —— Silksong 血条 HUD 与地图收集物标记的 exefs 注入版（Ryujinx 与 Atmosphère 通用）。
 //
-// 与 plugin/（SaltyNX 版）的区别：
-//   - 由游戏自己的 rtld 以 subsdk9 加载，不依赖 SaltyNX / Tesla，模拟器能跑。
+//   - 由游戏自己的 rtld 以 subsdk9 加载，不依赖任何 sysmodule / overlay。
 //   - hook 用 exlaunch 的 trampoline（svcMapProcessMemory 给 .text 建 RW 别名）。
 //   - 绘制在游戏进程内用 Unity IMGUI 完成（hud_hooks.hpp / hud_draw.hpp），
 //     地图收集物标记克隆游戏自己的标记模板（map_markers.hpp），
-//     日志走 svcOutputDebugString（Ryujinx 按 ASCII 解码，所以日志文本用英文）。
+//     日志走 svcOutputDebugString 与 SD 卡（Ryujinx 按 ASCII 解码，所以日志文本用英文）。
 //
 // 时机：rtld 在 main 的入口之前初始化 subsdk，所以 exl_main 跑的时候
 // IL2CPP 尚未初始化 —— 这里只装 hook，所有 Unity 调用都发生在 hook 体里（主线程）。
 //
-// 地址约定与 plugin/ 相同：运行时地址 = main 模块基址 + RVA（offsets.h）。
+// 地址约定：运行时地址 = main 模块基址 + RVA（offsets.h，由 tools/30-gen-offsets.py 生成）。
 
 #include "lib.hpp"
 #include "offsets.h"

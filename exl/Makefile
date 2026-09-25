@@ -5,7 +5,7 @@
 #   Atmosphère : SD:/atmosphere/contents/010013C00E930000/exefs/
 #
 # 需要：devkitPro（switch-dev）、vendor/exlaunch（见 HANDOFF）、
-#       plugin/source/offsets.h 与 work/dump/ExeFS/main.npdm（都来自你自己的转储）。
+#       program/offsets.h 与 work/dump/ExeFS/main.npdm（都来自你自己的转储）。
 #
 # vendor/exlaunch 是模板仓库，程序代码要放进它的 source/program/。
 # 为了不改 vendor，每次构建把它同步到 build/sshud/，再把 program/ 和
@@ -18,7 +18,7 @@ endif
 REPO_ROOT := $(abspath $(CURDIR)/..)
 EXLAUNCH  ?= $(REPO_ROOT)/vendor/exlaunch
 STAGE     := $(CURDIR)/build/sshud
-OFFSETS   := $(REPO_ROOT)/plugin/source/offsets.h
+OFFSETS   := $(CURDIR)/program/offsets.h
 GAME_NPDM ?= $(REPO_ROOT)/work/dump/ExeFS/main.npdm
 DEPLOY    := $(CURDIR)/deploy/exefs
 

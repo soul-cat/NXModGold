@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 Il2CppDumper 产出的 dump.cs 提取字段偏移与方法 RVA，生成 plugin/source/offsets.h。
+"""从 Il2CppDumper 产出的 dump.cs 提取字段偏移与方法 RVA，生成 exl/program/offsets.h。
 
 dump.cs 的格式（Il2CppDumper 输出）：
 
@@ -18,7 +18,7 @@ dump.cs 的格式（Il2CppDumper 输出）：
 
 用法:
     ./tools/30-gen-offsets.py
-    ./tools/30-gen-offsets.py --dump work/dump.cs --out plugin/source/offsets.h
+    ./tools/30-gen-offsets.py --dump work/dump.cs --out exl/program/offsets.h
 """
 
 from __future__ import annotations
@@ -300,7 +300,7 @@ def main() -> int:
     )
     parser.add_argument("--dump", default=str(REPO_ROOT / "work" / "dump.cs"), help="dump.cs 路径")
     parser.add_argument("--targets", default=str(REPO_ROOT / "tools" / "targets.json"))
-    parser.add_argument("--out", default=str(REPO_ROOT / "plugin" / "source" / "offsets.h"))
+    parser.add_argument("--out", default=str(REPO_ROOT / "exl" / "program" / "offsets.h"))
     parser.add_argument("--build-id", default="", help="游戏 Build ID（16 位十六进制）")
     parser.add_argument(
         "--main-bin",

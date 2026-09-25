@@ -14,8 +14,7 @@ PYTHON := python3
 # tools/40-patch-npdm.py 从游戏原版 npdm 生成，见 exl/Makefile。
 NPDM_JSON := application.json
 
-# offsets.h 只有一份：plugin/source/offsets.h（tools/30-gen-offsets.py 生成，不入库）
-C_FLAGS := -I$(REPO_ROOT)/plugin/source
+# offsets.h 由 tools/30-gen-offsets.py 生成到 program/（不入库），随 program/ 一起同步进构建目录
 # GCC 16 新增的告警，exlaunch 的 hook_impl.cpp 会触发（它开了 -Werror）
 CXX_FLAGS := -Wno-non-c-typedef-for-linkage
 
