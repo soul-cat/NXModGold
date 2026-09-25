@@ -117,6 +117,12 @@ make -C exl
 用 `tools/40-patch-npdm.py` 在游戏原版 npdm 上补 exlaunch 需要的 SVC 与 SD 访问权限。
 产物：`exl/deploy/exefs/{subsdk9,main.npdm}`。
 
+打包发布用的 zip（解压到 SD 根目录或交给 NX-Mod-Manager 均可，作者 cool）：
+
+```bash
+./tools/70-package-release.sh 1.0.0   # → work/release/SilksongHUD-v1.0.0.zip
+```
+
 面板文字要改时才需要重渲染（需要 Pillow 与 Noto Sans SC Bold，SIL OFL）：
 
 ```bash
