@@ -109,6 +109,8 @@ make -C exl
 - **`main.npdm` 必须基于游戏原版**：exlaunch 要 `svcMapProcessMemory` 等 4 个零售游戏没有的 SVC。`40-patch-npdm.py` 只补 ACID/ACI0 的 KAC，
   并把 fs 权限放开到 `0xffffffffffffffff`（原版只有 Debug 位，挂不了 SD），其余字节原样。不要用 exlaunch 模板 json 生成（别的游戏的栈大小 / 服务表）。
 - **GCC 16** 对 exlaunch 的 `hook_impl.cpp` 报 `-Wnon-c-typedef-for-linkage`（它开了 `-Werror`），`exl/config.mk` 已加 `-Wno-`。
+- **必须 `-fno-threadsafe-statics`**（`exl/config.mk` 已加）：带构造函数的函数内 `static` 默认由 `__cxa_guard_acquire` 加锁，它调 newlib 的
+  `pthread_once` / `pthread_mutex_lock`，本模块没有 libnx 线程原语，实机第一次进入就卡死（曾让开大地图卡死）。改完可用 `nm` 确认没有 `__cxa_guard_acquire`。
 - `exl/Makefile` 每次构建把 `vendor/exlaunch` 同步到 `exl/build/sshud/`，不改 vendor；不往仓库外写文件，部署手动拷。
 
 ### 绘制
