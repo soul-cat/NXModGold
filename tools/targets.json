@@ -176,6 +176,80 @@
       "field": "enableGUILayout",
       "required": true,
       "_note": "public bool；PlayMakerGUI.OnGUI 开头执行 useGUILayout = enableGUILayout（反汇编：ldrb [this,#0x21] → set_useGUILayout_Injected），所以要改这个字段而不是只调 set_useGUILayout"
+    },
+    {
+      "name": "UIM_GAMEOPTIONSSCREEN",
+      "class": "UIManager",
+      "field": "gameOptionsMenuScreen",
+      "required": true,
+      "_note": "游戏选项页（MenuScreen），原生开关行插在它里面"
+    },
+    {
+      "name": "MOH_OPTIONTEXT",
+      "class": "MenuOptionHorizontal",
+      "field": "optionText",
+      "required": true,
+      "namespace": "UnityEngine.UI",
+      "_note": "显示当前选项的 Text"
+    },
+    {
+      "name": "MOH_OPTIONLIST",
+      "class": "MenuOptionHorizontal",
+      "field": "optionList",
+      "required": true,
+      "namespace": "UnityEngine.UI",
+      "_note": "string[]，localizeText 时是本地化键"
+    },
+    {
+      "name": "MOH_SELECTEDINDEX",
+      "class": "MenuOptionHorizontal",
+      "field": "selectedOptionIndex",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "MOH_MENUSETTING",
+      "class": "MenuOptionHorizontal",
+      "field": "menuSetting",
+      "required": true,
+      "namespace": "UnityEngine.UI",
+      "_note": "非空时 UpdateSetting 会改游戏设置；克隆行必须清空"
+    },
+    {
+      "name": "MOH_APPLYSETTINGON",
+      "class": "MenuOptionHorizontal",
+      "field": "applySettingOn",
+      "required": true,
+      "namespace": "UnityEngine.UI",
+      "_note": "0 = Scroll（左右切换即 UpdateSetting），1 = Submit"
+    },
+    {
+      "name": "MOH_REFRESHLIST",
+      "class": "MenuOptionHorizontal",
+      "field": "refreshListOnChange",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "MSET_SETTINGTYPE",
+      "class": "MenuSetting",
+      "field": "settingType",
+      "required": true,
+      "_note": "只用于日志"
+    },
+    {
+      "name": "MBL_ACTIVESELECTABLES",
+      "class": "MenuButtonList",
+      "field": "activeSelectables",
+      "required": true,
+      "_note": "List<Selectable>，SetupActive 按它的顺序串上下导航"
+    },
+    {
+      "name": "ALT_TEXTFIELD",
+      "class": "AutoLocalizeTextUI",
+      "field": "textField",
+      "required": true,
+      "_note": "行标签的 Text"
     }
   ],
   "methods": [
@@ -783,6 +857,121 @@
       "signature_contains": "void Free()",
       "required": true,
       "_note": "实例方法（值类型）：原生签名 void (GCHandle* self, const MethodInfo*)；self 指向 Alloc 返回的句柄值"
+    },
+    {
+      "name": "UIM_UIGOTOGAMEOPTIONS",
+      "class": "UIManager",
+      "method": "UIGoToGameOptionsMenu",
+      "required": true,
+      "_note": "hook：打开游戏选项页（此时页面还未激活）"
+    },
+    {
+      "name": "MBL_SETUPACTIVE",
+      "class": "MenuButtonList",
+      "method": "SetupActive",
+      "required": true,
+      "_note": "hook：页面激活时重排导航，之后把我们的行接进去"
+    },
+    {
+      "name": "MOH_UPDATESETTING",
+      "class": "MenuOptionHorizontal",
+      "method": "UpdateSetting",
+      "required": true,
+      "namespace": "UnityEngine.UI",
+      "_note": "hook：左右切换后应用"
+    },
+    {
+      "name": "MOH_SETOPTIONTO",
+      "class": "MenuOptionHorizontal",
+      "method": "SetOptionTo",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "SEL_GETNAVIGATION",
+      "class": "Selectable",
+      "method": "get_navigation",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "SEL_SETNAVIGATION",
+      "class": "Selectable",
+      "method": "set_navigation",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "TR_GETPARENT",
+      "class": "Transform",
+      "method": "get_parent",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "TR_SETSIBLINGINDEX",
+      "class": "Transform",
+      "method": "SetSiblingIndex",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GO_GETACTIVESELF",
+      "class": "GameObject",
+      "method": "get_activeSelf",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "TEXT_SETTEXT",
+      "class": "Text",
+      "method": "set_text",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "TEXT_GETTEXT",
+      "class": "Text",
+      "method": "get_text",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "TEXT_GETFONT",
+      "class": "Text",
+      "method": "get_font",
+      "required": true,
+      "namespace": "UnityEngine.UI"
+    },
+    {
+      "name": "FONT_HASCHARACTER",
+      "class": "Font",
+      "method": "HasCharacter",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "HasCharacter(char c)"
+    },
+    {
+      "name": "MARSHAL_PTRTOSTRUNI",
+      "class": "Marshal",
+      "method": "PtrToStringUni",
+      "required": true,
+      "namespace": "System.Runtime.InteropServices",
+      "signature_contains": "PtrToStringUni(IntPtr ptr)"
+    },
+    {
+      "name": "FM_GETCURRENTLANGUAGE",
+      "class": "FontManager",
+      "method": "get_CurrentLanguage",
+      "required": true
+    },
+    {
+      "name": "UOBJ_DESTROYIMMEDIATE",
+      "class": "Object",
+      "method": "DestroyImmediate",
+      "required": true,
+      "namespace": "UnityEngine",
+      "signature_contains": "DestroyImmediate(Object obj)"
     }
   ],
   "script": [

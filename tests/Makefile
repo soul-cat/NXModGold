@@ -3,7 +3,7 @@ CXX      ?= c++
 CXXFLAGS ?= -std=c++17 -O1 -g -Wall -Wextra
 SANFLAGS ?= -fsanitize=address,undefined
 
-BINS = test_hud_model test_toggles test_map_timing test_map_refresh_plan
+BINS = test_hud_model test_toggles test_map_timing test_map_refresh_plan test_options_menu_model
 
 .PHONY: all test clean
 all: $(BINS)
@@ -19,6 +19,9 @@ test_map_timing: test_map_timing.cpp ../exl/program/map_timing.hpp
 
 test_map_refresh_plan: test_map_refresh_plan.cpp ../exl/program/map_refresh_plan.hpp
 	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_map_refresh_plan.cpp
+
+test_options_menu_model: test_options_menu_model.cpp ../exl/program/options_menu_model.hpp ../exl/program/toggles_model.hpp
+	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_options_menu_model.cpp
 
 test: $(BINS)
 	@for b in $(BINS); do echo "--- $$b ---"; ./$$b || exit 1; done

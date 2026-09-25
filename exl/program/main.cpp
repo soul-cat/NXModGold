@@ -4,6 +4,7 @@
 //   - hook 用 exlaunch 的 trampoline（svcMapProcessMemory 给 .text 建 RW 别名）。
 //   - 绘制在游戏进程内用 Unity IMGUI 完成（hud_hooks.hpp / hud_draw.hpp），
 //     地图收集物标记克隆游戏自己的标记模板（map_markers.hpp），
+//     功能开关除 R3 面板外也做进了游戏原生的「选项 → 游戏」页（options_menu.hpp），
 //     日志走 svcOutputDebugString 与 SD 卡（Ryujinx 按 ASCII 解码，所以日志文本用英文）。
 //
 // 时机：rtld 在 main 的入口之前初始化 subsdk，所以 exl_main 跑的时候
@@ -15,6 +16,7 @@
 #include "offsets.h"
 #include "hud_hooks.hpp"
 #include "map_markers.hpp"
+#include "options_menu.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -87,6 +89,7 @@ extern "C" void exl_main(void* x0, void* x1) {
 
   sshud::hud::installHooks();
   sshud::map::installHooks();
+  sshud::options::installHooks();
 }
 
 extern "C" NORETURN void exl_exception_entry() {
