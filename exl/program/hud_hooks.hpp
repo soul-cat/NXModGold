@@ -51,11 +51,11 @@ inline void recordDamage(const HpSnapshot& before, float now) {
   const int32_t after = unity::readField<int32_t>(before.manager, HM_HP);
   const int32_t damage = before.hp - after;
   if (damage <= 0) return;
-  const int32_t maxHp = pickMaxHp(unity::readField<int32_t>(before.manager, HM_INITHP), before.hp);
-  g_model.onHit(before.manager, maxHp, now);
+  const int32_t initHp = unity::readField<int32_t>(before.manager, HM_INITHP);
+  g_model.onHit(before.manager, initHp, before.hp, now);
   const unity::Vector3 world = unity::worldPositionOf(before.manager);
   g_model.addPopup({world.x, world.y + POPUP_START_OFFSET_UNITS, world.z}, damage, now);
-  if constexpr (LOG_HITS) logHit(before, after, maxHp);
+  if constexpr (LOG_HITS) logHit(before, after, pickMaxHp(initHp, before.hp));
 }
 
 }  // namespace sshud::hud

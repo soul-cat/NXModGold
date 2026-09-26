@@ -182,7 +182,7 @@ static void testRetryThrottle() {
 }
 
 static void testPlaceholderHp() {
-  std::printf("test: 占位血量（SetHP 大数）不计入上限、期间不画，真实血量出现后抬高上限\n");
+  std::printf("test: 占位血量（SetHP 大数）不计入上限、期间不画，之后的真实血量是新阶段\n");
   CHECK(!isPlaceholderHp(3000));
   CHECK(isPlaceholderHp(9999));
   CHECK(pickMaxHp(9999, 800) == 800);
@@ -197,14 +197,35 @@ static void testPlaceholderHp() {
   CHECK(!isDrawable(enemy, 9999));
   model.expire(1.0f + HIDE_DELAY_SECONDS * 100.0f);  // BOSS 样式不按时间过期
   CHECK(enemy.active);
-  CHECK(!raiseMaxHp(enemy, 9999));
-  CHECK(raiseMaxHp(enemy, 800));  // FSM 设了真实血量
+  CHECK(!observeHp(enemy, 9999));
+  CHECK(observeHp(enemy, 800));  // FSM 设了真实血量
   CHECK(enemy.maxHp == 800 && isDrawable(enemy, 800));
-  CHECK(!raiseMaxHp(enemy, 500));
-  CHECK(!raiseMaxHp(enemy, 9999));  // 阶段间又设回占位：上限不变、不画
-  CHECK(enemy.maxHp == 800 && !isDrawable(enemy, 9999));
-  model.onHit(&boss, 9999, 2.0f);
-  CHECK(enemy.maxHp == 800);
+  CHECK(!observeHp(enemy, 500));
+  CHECK(!observeHp(enemy, 9999));  // 阶段间又设回占位：不画
+  CHECK(!isDrawable(enemy, 9999));
+  CHECK(observeHp(enemy, 600));  // 占位段之后：新阶段
+  CHECK(enemy.maxHp == 600);
+}
+
+static void testPhasedBoss() {
+  std::printf("test: 分阶段设血量的 BOSS（苍白之母）：上限不用 initHp，打空后新阶段上限重设\n");
+  HudModel model;
+  int boss = 0;
+  model.onHit(&boss, 1204, 100, 1.0f);  // initHp 是预制体上的 1204，实际这阶段 100 血
+  Enemy& enemy = model.enemies()[0];
+  CHECK(enemy.isBossStyle && enemy.maxHp == 100);
+  CHECK(!observeHp(enemy, 91));
+  CHECK(!observeHp(enemy, 0));  // 打空：readPresence 给 Hidden，槽位留着
+  CHECK(observeHp(enemy, 213));  // FSM 设下一阶段
+  CHECK(enemy.maxHp == 213);
+  CHECK(!observeHp(enemy, 150));
+  CHECK(!observeHp(enemy, 160));  // 小幅回血：不算新阶段
+  CHECK(enemy.maxHp == 213);
+  CHECK(observeHp(enemy, 300));  // 超过上限：抬高
+  CHECK(enemy.maxHp == 300);
+  int grunt = 0;
+  model.onHit(&grunt, 50, 20, 1.0f);  // 普通敌人：之前被打过也按 initHp 显示上限
+  CHECK(model.enemies()[1].maxHp == 50 && !model.enemies()[1].isBossStyle);
 }
 
 int main() {
@@ -216,6 +237,7 @@ int main() {
   testForget();
   testBossThreshold();
   testPlaceholderHp();
+  testPhasedBoss();
   testBossBarLayout();
   testFillRect();
   testHealthRatio();

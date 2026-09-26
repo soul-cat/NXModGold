@@ -1,5 +1,5 @@
-// BOSS 条的血量变化日志：只记开始跟踪、血量回升（阶段回满 / 设成占位）和占位段结束，受击掉血不记。
-// 用来核对 FSM 用 SetHP 改血量的 BOSS（苍白之母等）实际设了哪些值。
+// BOSS 条的血量跟踪日志：BOSS 的血量或显示状态每变一次记一行（受击也记），用来核对 FSM 分阶段设血量的
+// BOSS（苍白之母等）实际的血量走向。日志先进内存缓冲、每 2 秒整批写 SD，一场战斗几百行，不卡。
 
 #pragma once
 
@@ -8,17 +8,19 @@
 
 namespace sshud::hud {
 
-/// 绘制前调用：按上一帧血量判断要不要记一行，然后更新 lastHp
-inline void logBossHp(Enemy& enemy, int32_t hp) {
-  const int32_t last = enemy.lastHp;
-  enemy.lastHp = hp;
-  const bool isFirst = last == 0;
-  const bool isRise = !isFirst && hp > last;
-  const bool isPlaceholderEnd = isPlaceholderHp(last) && !isPlaceholderHp(hp);
-  if (!enemy.isBossStyle || !(isFirst || isRise || isPlaceholderEnd)) return;
-  char name[options::NAME_CAPACITY];
-  Logging.Log("[sshud] boss %s: hp %d -> %d, max %d%s", options::nameOf(const_cast<void*>(enemy.manager), name, sizeof(name)),
-              last, hp, enemy.maxHp, isPlaceholderHp(hp) ? " (placeholder, bar hidden)" : "");
+constexpr bool LOG_BOSS_HP = true;
+
+/// observeHp 之后调用：previousHp / wasHidden 是这一帧之前的状态
+inline void logBossHp(const Enemy& enemy, int32_t previousHp, bool wasHidden) {
+  if (!LOG_BOSS_HP || !enemy.isBossStyle) return;
+  if (previousHp == enemy.lastHp && wasHidden == enemy.isHidden) return;
+  if (previousHp == NO_HP) {
+    char name[options::NAME_CAPACITY];
+    Logging.Log("[sshud] boss %p is %s", enemy.manager,
+                options::nameOf(const_cast<void*>(enemy.manager), name, sizeof(name)));
+  }
+  Logging.Log("[sshud] boss %p hp %d -> %d max %d%s", enemy.manager, previousHp == NO_HP ? -1 : previousHp,
+              enemy.lastHp, enemy.maxHp, enemy.isHidden ? " hidden" : "");
 }
 
 }  // namespace sshud::hud

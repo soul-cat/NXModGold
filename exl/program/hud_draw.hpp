@@ -123,11 +123,30 @@ inline void drawPopup(const Frame& frame, const Popup& popup, int slot) {
   drawText(frame, x, y, DAMAGE_FONT_UNITS * ppu, damageTextFor(slot, popup.damage), color);
 }
 
-/// 敌人已销毁 / 被停用 / 死亡 / 血量归零 → 返回 false，调用方应 forget
-inline bool readLiveHp(const Enemy& enemy, int32_t& outHp) {
-  if (!ui::isAlive(enemy.manager) || ui::readField<bool>(enemy.manager, HM_ISDEAD)) return false;
+enum class Presence { Gone, Hidden, Shown };
+
+/// 已销毁 / 死亡 → Gone（调用方 forget）。血量归零或被停用：普通敌人 Gone；BOSS 只是 Hidden，
+/// 分阶段设血量的 BOSS 打空一阶段、或暂时停用后还会回来，槽位与上限要留着
+inline Presence readPresence(const Enemy& enemy, int32_t& outHp) {
+  if (!ui::isAlive(enemy.manager) || ui::readField<bool>(enemy.manager, HM_ISDEAD)) return Presence::Gone;
   outHp = ui::readField<int32_t>(enemy.manager, HM_HP);
-  return outHp > 0 && ui::isActiveInHierarchy(enemy.manager);  // 托管调用放最后
+  if (outHp > 0 && ui::isActiveInHierarchy(enemy.manager)) return Presence::Shown;  // 托管调用放最后
+  return enemy.isBossStyle ? Presence::Hidden : Presence::Gone;
+}
+
+/// 读这一帧的血量、更新上限与显示状态；返回 false 表示这一帧不画（Gone 时已清掉槽位）
+inline bool updateEnemy(Enemy& enemy, int32_t& outHp) {
+  const Presence presence = readPresence(enemy, outHp);
+  if (presence == Presence::Gone) {
+    enemy = Enemy{};
+    return false;
+  }
+  const int32_t previousHp = enemy.lastHp;
+  const bool wasHidden = enemy.isHidden;
+  observeHp(enemy, outHp);
+  enemy.isHidden = presence == Presence::Hidden || !isDrawable(enemy, outHp);  // 占位段（过场 / 无敌）不画
+  logBossHp(enemy, previousHp, wasHidden);
+  return !enemy.isHidden;
 }
 
 /// 读活血量并清理失效条目（开关全关也要跑）；按开关决定画不画 BOSS 条 / 小怪血条
@@ -139,13 +158,7 @@ inline void drawEnemies(const Frame& frame, HudModel& model, const toggles::Sett
     Enemy& enemy = model.enemies()[i];
     if (!enemy.active) continue;
     int32_t hp = 0;
-    if (!readLiveHp(enemy, hp)) {
-      enemy = Enemy{};
-      continue;
-    }
-    raiseMaxHp(enemy, hp);
-    logBossHp(enemy, hp);
-    if (!isDrawable(enemy, hp)) continue;  // 占位血量段（过场 / 无敌）不画
+    if (!updateEnemy(enemy, hp)) continue;
     if (enemy.isBossStyle) {
       if (isBossBarEnabled) drawBoss(frame, {enemy, i, hp}, bossIndex++);
     } else if (isEnemyBarEnabled) {

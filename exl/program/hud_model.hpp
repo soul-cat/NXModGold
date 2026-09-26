@@ -16,6 +16,7 @@ constexpr int32_t BOSS_HP_THRESHOLD = 105;   // 初始最大血量 > 此值 → 
 // 高于此值的血量是 FSM（SetHP）设的占位值：BOSS 过场 / 无敌段先设成大数，开打再设真实血量（苍白之母即如此；
 // PC 版 Silk_HpBarPro 同样只接受 ≤ 3000 的血量作上限）。占位血量不计入上限，期间不画条。
 constexpr int32_t PLACEHOLDER_HP_MIN = 3001;
+constexpr int32_t NO_HP = INT32_MIN;  // Enemy.lastHp：还没读过血量
 constexpr float HIDE_DELAY_SECONDS = 1.5f;   // 普通敌人最后一次掉血后多久隐藏（BOSS 条不按时间隐藏）
 constexpr float POPUP_DURATION_SECONDS = 2.0f;
 constexpr float POPUP_RISE_UNITS = 1.4f;     // 飘字上升的世界单位
@@ -57,11 +58,12 @@ struct WorldPoint {
 
 struct Enemy {
   const void* manager = nullptr;  // HealthManager*（仅作标识与读字段，不持有 GC 引用）
-  int32_t maxHp = 0;              // 见过的最大真实血量；0 = 还没见过（只见过占位血量）
-  int32_t lastHp = 0;             // 上一次绘制时读到的血量（0 = 还没画过），日志用
+  int32_t maxHp = 0;              // 当前阶段的上限；0 = 还没见过真实血量（只见过占位血量）
+  int32_t lastHp = NO_HP;         // 上一帧读到的血量（observeHp 维护）
   float lastHitAt = 0.0f;
   bool active = false;
   bool isBossStyle = false;       // 见过的血量（含占位）超过 BOSS 门槛
+  bool isHidden = false;          // BOSS 暂时不画（血量归零 / 停用 / 占位段），槽位留着等它回来
 };
 
 struct Popup {
@@ -81,9 +83,14 @@ inline int32_t pickMaxHp(int32_t initHp, int32_t hp) {
   return isPlaceholderHp(initHp) ? hp : initHp;
 }
 
-/// 绘制时读到的血量是真实值且超过已知上限（占位段之后第一次见到真实血量 / 阶段回满）就抬高上限；返回是否抬高了
-inline bool raiseMaxHp(Enemy& enemy, int32_t hp) {
-  if (isPlaceholderHp(hp) || hp <= enemy.maxHp) return false;
+/// 每帧读到的血量：超过上限就抬高；耗尽（≤ 0）或占位段之后又出现真实血量 = FSM 开始了新阶段，上限重设为它
+/// （苍白之母每阶段用 SetHP 设一两百血，打空后设下一阶段）。返回上限是否变了
+inline bool observeHp(Enemy& enemy, int32_t hp) {
+  const int32_t last = enemy.lastHp;
+  enemy.lastHp = hp;
+  if (isPlaceholderHp(hp) || hp <= 0) return false;
+  const bool isNewPhase = last != NO_HP && (last <= 0 || isPlaceholderHp(last));
+  if (!isNewPhase && hp <= enemy.maxHp) return false;
   enemy.maxHp = hp;
   return true;
 }
@@ -152,15 +159,20 @@ struct RetryThrottle {
 
 class HudModel {
  public:
-  /// 记录一次掉血；hp 由绘制时实时读取，这里只存最大血量与时间。maxHp 是占位血量时只用来判定 BOSS 样式。
-  void onHit(const void* manager, int32_t maxHp, float now) {
+  /// 记录一次掉血 / 扫到 BOSS；hp 由绘制时实时读取，这里只存上限与时间。
+  /// initHp 只用来判定 BOSS 样式和普通敌人的上限：BOSS 的 initHp 可能只是预制体上的值
+  /// （苍白之母 1204，实际每阶段一两百），所以 BOSS 的上限只认实际见过的血量。占位血量不计入上限。
+  void onHit(const void* manager, int32_t initHp, int32_t hp, float now) {
     Enemy& slot = slotFor(manager);
     slot.manager = manager;
-    slot.isBossStyle = slot.isBossStyle || isBoss(maxHp);
-    if (!isPlaceholderHp(maxHp)) slot.maxHp = std::max(slot.maxHp, maxHp);
+    slot.isBossStyle = slot.isBossStyle || isBoss(pickMaxHp(initHp, hp));
+    const int32_t candidate = slot.isBossStyle ? hp : pickMaxHp(initHp, hp);
+    if (!isPlaceholderHp(candidate)) slot.maxHp = std::max(slot.maxHp, candidate);
     slot.lastHitAt = now;
     slot.active = true;
   }
+
+  void onHit(const void* manager, int32_t maxHp, float now) { onHit(manager, maxHp, maxHp, now); }
 
   void addPopup(WorldPoint origin, int32_t damage, float now) {
     Popup& slot = oldestPopup();
