@@ -117,6 +117,10 @@ void flushIfDue(float now) {
   flushPending();
 }
 
+void flushNow() {
+  if (s_state == State::Writing) flushPending();
+}
+
 }  // namespace sdlog
 
 }  // namespace sshud

@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "options_menu_layout.hpp"
 #include "options_menu_nav.hpp"
 #include "sd_logger.hpp"
 #include "start_crest.hpp"
@@ -47,6 +48,8 @@ inline void inject(MenuState& state, ui::ManagedObject screen) {
   if (plan.anchorRow == nullptr) return Logging.Log("[sshud] options: no active row in content, giving up");
   state.screen = screen;
   state.list = scan.list;
+  state.content = plan.content;
+  state.maxSpacing = spacingOf(plan.content);
   state.listPin = ui::pinObject(scan.list);
   std::copy(scan.options, scan.options + scan.optionCount, state.originals);
   state.originalCount = scan.optionCount;
@@ -73,6 +76,8 @@ inline void prepareScreen(ui::ManagedObject uiManager) {
     if (g_menu.isInjected) Logging.Log("[sshud] options: screen rebuilt, re-injecting");
     g_menu.discard();
     inject(g_menu, screen);
+  } else {
+    logLayoutOnce(g_menu.content);  // 第二次打开时上次的布局已经算过
   }
   syncRows(g_menu.rows, g_menu.onIndex);
 }
@@ -82,6 +87,7 @@ inline void applyFeatureChange(size_t feature, bool isOn) {
   toggles::g_settings.enabled[feature] = isOn;
   toggles::saveSettings(toggles::g_settings);
   Logging.Log("[sshud] options: %s=%d", toggles::FEATURES[feature].key, isOn ? 1 : 0);
+  sdlog::flushNow();
 }
 
 inline void applyCrestChange(int32_t index) {
@@ -89,12 +95,14 @@ inline void applyCrestChange(int32_t index) {
   toggles::g_settings.startCrest = index;
   toggles::saveSettings(toggles::g_settings);
   Logging.Log("[sshud] options: %s=%d (%s)", toggles::START_CREST_KEY, index, crest::crestIdOf(index));
+  sdlog::flushNow();
 }
 
 /// UpdateSetting 之后：是我们的行就改设置并写回 SD
 inline void applyRowChange(const MenuState& state, ui::ManagedObject option) {
   for (size_t i = 0; i < ROW_COUNT; ++i) {
     if (state.rows[i].option != option) continue;
+    logLayoutOnce(state.content);  // 页面正显示着，布局已经算过
     const int32_t selected = ui::readField<int32_t>(option, MOH_SELECTEDINDEX);
     if (i == CREST_ROW) return applyCrestChange(selected);
     return applyFeatureChange(i, selected == state.onIndex);
@@ -113,7 +121,9 @@ HOOK_DEFINE_TRAMPOLINE(GoToGameOptionsHook) {
 HOOK_DEFINE_TRAMPOLINE(MenuListSetupActiveHook) {
   static void Callback(void* self, const void* method) {
     Orig(self, method);
-    sshud::options::spliceNavigation(sshud::options::g_menu, self);
+    namespace options = sshud::options;
+    options::spliceNavigation(options::g_menu, self);
+    if (self == options::g_menu.list) options::fitRowSpacing(options::g_menu.content, options::g_menu.maxSpacing);
   }
 };
 

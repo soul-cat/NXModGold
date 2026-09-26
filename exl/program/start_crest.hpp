@@ -1,9 +1,10 @@
 // 新存档起始纹章（照 PC 版 dpinela/Silksong.StartCrestSelector，选择在原生选项页的「新存档起始纹章」行）。
 //
 //   1. PlayerData.SetupNewPlayerData（后）：游戏在这里建纹章表、只解锁 "Hunter"（反汇编：
-//      ToolEquips.SetData("Hunter", {IsUnlocked = true})）。选了别的纹章时，把 Hunter 改回未解锁、
-//      解锁所选纹章，并把 CurrentCrestID 设成它。每次 new PlayerData 都会跑这个函数，读档时随后
-//      被存档内容整体覆盖，所以只有新存档会留下改动（与 PC 版同一前提）。
+//      ToolEquips.SetData("Hunter", {IsUnlocked = true})，不判空）。选了别的纹章时，把 Hunter 改回未解锁、
+//      解锁所选纹章，并把 CurrentCrestID 设成它。这个函数在反序列化之后也会被调（CreateNewSingleton、
+//      以及另一处 Deserialize<PlayerData> 之后紧跟 SetupExistingPlayerData），所以只在
+//      GameManager.StartNewGame 执行期间生效（新游戏：StartNewGame → CreateNewSingleton → 这里）。
 //   2. GameManager.StartAct3 期间的 ToolItemManager.AutoEquip：第三幕开头游戏强制装备猎人纹章
 //      （按已解锁的最高等级，都没解锁时仍装基础猎人）。Switch 版把取纹章内联进了 StartAct3，
 //      只能在这段时间里拦 AutoEquip：要装的纹章没解锁时（即这个存档不是猎人开局），换成当前装备的纹章。
@@ -32,6 +33,7 @@ struct CrestSaveData {
 static_assert(sizeof(CrestSaveData) == 24, "须与 ToolCrestsData.Data 同布局");
 
 inline bool g_isInStartAct3 = false;
+inline bool g_isStartingNewGame = false;
 inline ui::PinHandle g_optionListPin = 0;  // 选项列表是我们直接写进字段的（没有写屏障），钉住防回收
 
 /// ToolEquips.SetData(id, {isUnlocked})；泛型共享方法，MethodInfo 取自已初始化的元数据槽
@@ -45,17 +47,21 @@ inline void setCrestUnlocked(void* crests, const char* id, bool isUnlocked) {
 
 /// SetupNewPlayerData 之后：按设置换掉起始纹章（猎人时什么都不做）
 inline void applyToNewPlayerData(void* playerData, bool addEditorOverrides) {
+  if (!g_isStartingNewGame) return;
   sdlog::start();
   toggles::loadOnce();
   const int32_t index = toggles::g_settings.startCrest;
+  Logging.Log("[sshud] crest: new game PlayerData, start_crest=%d", index);
+  sdlog::flushNow();
   if (index == HUNTER_INDEX || playerData == nullptr) return;
   void* crests = ui::readField<void*>(playerData, PD_TOOLEQUIPS);
   if (crests == nullptr) return Logging.Log("[sshud] crest: ToolEquips missing, start crest unchanged");
   setCrestUnlocked(crests, CREST_IDS[HUNTER_INDEX], false);
   setCrestUnlocked(crests, crestIdOf(index), true);
   call<void>(PD_SETSTRING, playerData, managedString("CurrentCrestID"), managedString(crestIdOf(index)));
-  Logging.Log("[sshud] crest: new PlayerData starts with %s (editorOverrides=%d)", crestIdOf(index),
+  Logging.Log("[sshud] crest: new game starts with %s (editorOverrides=%d)", crestIdOf(index),
               addEditorOverrides ? 1 : 0);
+  sdlog::flushNow();
 }
 
 /// StartAct3 里要装的纹章没解锁时，换成当前装备的纹章
@@ -72,6 +78,7 @@ inline void* act3Crest(void* crest) {
     return crest;
   }
   Logging.Log("[sshud] crest: act3 wants locked %s, keeping %s", wanted, options::nameOf(replacement, used, sizeof(used)));
+  sdlog::flushNow();
   return replacement;
 }
 
@@ -121,6 +128,17 @@ HOOK_DEFINE_TRAMPOLINE(SetupNewPlayerDataHook) {
   }
 };
 
+// IL2CPP 签名：void (GameManager* self, bool permadeathMode, bool bossRushMode, const MethodInfo*)
+HOOK_DEFINE_TRAMPOLINE(StartNewGameHook) {
+  static void Callback(void* self, bool permadeathMode, bool bossRushMode, const void* method) {
+    Logging.Log("[sshud] crest: StartNewGame permadeath=%d bossRush=%d", permadeathMode ? 1 : 0, bossRushMode ? 1 : 0);
+    sshud::sdlog::flushNow();
+    sshud::crest::g_isStartingNewGame = true;
+    Orig(self, permadeathMode, bossRushMode, method);
+    sshud::crest::g_isStartingNewGame = false;
+  }
+};
+
 HOOK_DEFINE_TRAMPOLINE(StartAct3Hook) {
   static void Callback(void* self, const void* method) {
     sshud::crest::g_isInStartAct3 = true;
@@ -140,10 +158,11 @@ HOOK_DEFINE_TRAMPOLINE(AutoEquipCrestHook) {
 namespace sshud::crest {
 
 inline void installHooks() {
+  StartNewGameHook::InstallAtOffset(GAMEMGR_STARTNEWGAME);
   SetupNewPlayerDataHook::InstallAtOffset(PD_SETUPNEWPLAYERDATA);
   StartAct3Hook::InstallAtOffset(GAMEMGR_STARTACT3);
   AutoEquipCrestHook::InstallAtOffset(TIM_AUTOEQUIPCREST);
-  Logging.Log("[sshud] crest hooks installed: SetupNewPlayerData, StartAct3, AutoEquip");
+  Logging.Log("[sshud] crest hooks installed: StartNewGame, SetupNewPlayerData, StartAct3, AutoEquip");
 }
 
 }  // namespace sshud::crest

@@ -9,6 +9,8 @@ namespace sshud::options {
 struct MenuState {
   ui::ManagedObject screen = nullptr;  // 注入时的游戏选项页（只比较，不解引用）
   ui::ManagedObject list = nullptr;
+  ui::ManagedObject content = nullptr;  // 行所在的内容容器（排版用；页面活着它就活着）
+  float maxSpacing = 0.0f;              // 注入前容器的原始行距（压缩行距的上限）
   ui::PinHandle listPin = 0;
   ui::ManagedObject originals[MAX_SCANNED_OPTIONS] = {};  // 原生选项行（只比较）
   size_t originalCount = 0;

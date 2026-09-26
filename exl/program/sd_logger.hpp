@@ -22,6 +22,8 @@ namespace sdlog {
 void start();
 /// 每帧调用：距上次定时写出满 2 秒且缓冲非空时整批写出
 void flushIfDue(float now);
+/// 立刻写出缓冲（关键步骤之后调用：随后若闪退，日志不会停在 2 秒前）
+void flushNow();
 
 }  // namespace sdlog
 
