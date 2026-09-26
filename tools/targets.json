@@ -321,6 +321,27 @@
       "field": "localizeText",
       "required": true,
       "_note": "false 时 optionList 直接当显示文字"
+    },
+    {
+      "name": "FONTMGR_INSTANCE_STATIC",
+      "class": "FontManager",
+      "field": "instance",
+      "required": true,
+      "_note": "静态字段（相对 static_fields）"
+    },
+    {
+      "name": "FONTMGR_FALLBACKS",
+      "class": "FontManager",
+      "field": "fallbacks",
+      "required": true,
+      "_note": "List<FontFallbackBase>"
+    },
+    {
+      "name": "UFF_FONT",
+      "class": "UnityFontFallback",
+      "field": "font",
+      "required": true,
+      "_note": "游戏按语言给它设 fontNames（系统字库回退）"
     }
   ],
   "methods": [
@@ -1155,6 +1176,20 @@
       "method": "StartNewGame",
       "required": true,
       "_note": "hook：新游戏入口，内部 PlayerData.CreateNewSingleton → SetupNewPlayerData；起始纹章只在这期间生效"
+    },
+    {
+      "name": "GUISTYLE_GETDEFAULTFONT",
+      "class": "GUIStyle",
+      "method": "GetDefaultFont",
+      "required": true,
+      "namespace": "UnityEngine"
+    },
+    {
+      "name": "GUISTYLE_SETDEFAULTFONT",
+      "class": "GUIStyle",
+      "method": "SetDefaultFont",
+      "required": true,
+      "namespace": "UnityEngine"
     }
   ],
   "script": [
@@ -1213,6 +1248,16 @@
       "name": "SNL_CRESTDATA_SETDATA_MI",
       "kind": "metadata_slot",
       "script_name": "Method$SerializableNamedList<ToolCrestsData.Data, ToolCrestsData.NamedData>.SetData()"
+    },
+    {
+      "name": "FONTMGR_TYPEINFO",
+      "kind": "type_slot",
+      "script_name": "FontManager_TypeInfo"
+    },
+    {
+      "name": "FONT_TYPEINFO",
+      "kind": "type_slot",
+      "script_name": "UnityEngine.Font_TypeInfo"
     }
   ]
 }

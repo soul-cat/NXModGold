@@ -9,6 +9,7 @@
 #pragma once
 
 #include "bar_textures.hpp"
+#include "hud_boss_log.hpp"
 #include "hud_frame.hpp"
 #include "hud_model.hpp"
 #include "hud_text_cache.hpp"
@@ -142,7 +143,10 @@ inline void drawEnemies(const Frame& frame, HudModel& model, const toggles::Sett
       enemy = Enemy{};
       continue;
     }
-    if (isBoss(enemy.maxHp)) {
+    raiseMaxHp(enemy, hp);
+    logBossHp(enemy, hp);
+    if (!isDrawable(enemy, hp)) continue;  // 占位血量段（过场 / 无敌）不画
+    if (enemy.isBossStyle) {
       if (isBossBarEnabled) drawBoss(frame, {enemy, i, hp}, bossIndex++);
     } else if (isEnemyBarEnabled) {
       drawEnemy(frame, {enemy, i, hp});

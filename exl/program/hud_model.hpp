@@ -13,6 +13,9 @@ namespace sshud::hud {
 
 // ---------------------------------------------------------------- PC 默认值
 constexpr int32_t BOSS_HP_THRESHOLD = 105;   // 初始最大血量 > 此值 → BOSS 样式
+// 高于此值的血量是 FSM（SetHP）设的占位值：BOSS 过场 / 无敌段先设成大数，开打再设真实血量（苍白之母即如此；
+// PC 版 Silk_HpBarPro 同样只接受 ≤ 3000 的血量作上限）。占位血量不计入上限，期间不画条。
+constexpr int32_t PLACEHOLDER_HP_MIN = 3001;
 constexpr float HIDE_DELAY_SECONDS = 1.5f;   // 普通敌人最后一次掉血后多久隐藏（BOSS 条不按时间隐藏）
 constexpr float POPUP_DURATION_SECONDS = 2.0f;
 constexpr float POPUP_RISE_UNITS = 1.4f;     // 飘字上升的世界单位
@@ -54,9 +57,11 @@ struct WorldPoint {
 
 struct Enemy {
   const void* manager = nullptr;  // HealthManager*（仅作标识与读字段，不持有 GC 引用）
-  int32_t maxHp = 0;
+  int32_t maxHp = 0;              // 见过的最大真实血量；0 = 还没见过（只见过占位血量）
+  int32_t lastHp = 0;             // 上一次绘制时读到的血量（0 = 还没画过），日志用
   float lastHitAt = 0.0f;
   bool active = false;
+  bool isBossStyle = false;       // 见过的血量（含占位）超过 BOSS 门槛
 };
 
 struct Popup {
@@ -67,6 +72,24 @@ struct Popup {
 };
 
 inline bool isBoss(int32_t maxHp) { return maxHp > BOSS_HP_THRESHOLD; }
+
+inline bool isPlaceholderHp(int32_t hp) { return hp >= PLACEHOLDER_HP_MIN; }
+
+/// 受击时的上限候选（initHp 与打前血量）：取真实血量里较大的；两个都是占位时返回较大的占位值（仍用于判定 BOSS 样式）
+inline int32_t pickMaxHp(int32_t initHp, int32_t hp) {
+  if (isPlaceholderHp(initHp) == isPlaceholderHp(hp)) return std::max(initHp, hp);
+  return isPlaceholderHp(initHp) ? hp : initHp;
+}
+
+/// 绘制时读到的血量是真实值且超过已知上限（占位段之后第一次见到真实血量 / 阶段回满）就抬高上限；返回是否抬高了
+inline bool raiseMaxHp(Enemy& enemy, int32_t hp) {
+  if (isPlaceholderHp(hp) || hp <= enemy.maxHp) return false;
+  enemy.maxHp = hp;
+  return true;
+}
+
+/// 这一帧能画：真实血量且已知上限
+inline bool isDrawable(const Enemy& enemy, int32_t hp) { return !isPlaceholderHp(hp) && enemy.maxHp > 0; }
 
 inline float healthRatio(int32_t hp, int32_t maxHp) {
   if (maxHp <= 0) return 0.0f;
@@ -129,11 +152,12 @@ struct RetryThrottle {
 
 class HudModel {
  public:
-  /// 记录一次掉血；hp 由绘制时实时读取，这里只存最大血量与时间。
+  /// 记录一次掉血；hp 由绘制时实时读取，这里只存最大血量与时间。maxHp 是占位血量时只用来判定 BOSS 样式。
   void onHit(const void* manager, int32_t maxHp, float now) {
     Enemy& slot = slotFor(manager);
     slot.manager = manager;
-    slot.maxHp = std::max(slot.maxHp, maxHp);
+    slot.isBossStyle = slot.isBossStyle || isBoss(maxHp);
+    if (!isPlaceholderHp(maxHp)) slot.maxHp = std::max(slot.maxHp, maxHp);
     slot.lastHitAt = now;
     slot.active = true;
   }
@@ -145,7 +169,7 @@ class HudModel {
 
   void expire(float now) {
     for (Enemy& enemy : enemies_) {
-      if (enemy.active && !isBoss(enemy.maxHp) && now - enemy.lastHitAt >= HIDE_DELAY_SECONDS) enemy = Enemy{};
+      if (enemy.active && !enemy.isBossStyle && now - enemy.lastHitAt >= HIDE_DELAY_SECONDS) enemy = Enemy{};
     }
     for (Popup& popup : popups_) {
       if (popup.active && now - popup.startedAt >= POPUP_DURATION_SECONDS) popup = Popup{};

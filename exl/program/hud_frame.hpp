@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "hud_font.hpp"
 #include "hud_model.hpp"
 #include "unity_api.hpp"
 
@@ -15,7 +16,7 @@ namespace ui = sshud::unity;
 
 constexpr float TEXT_BOX_WIDTH_FACTOR = 6.0f;  // 文字框宽度 = 字号 × 此值，足够放下 "9999/9999"
 
-/// 保存并在析构时还原本模块会改动的 IMGUI 全局状态
+/// 保存并在析构时还原本模块会改动的 IMGUI 全局状态（含默认字体：换成游戏字体，见 hud_font.hpp）
 class ImguiStateGuard {
  public:
   ImguiStateGuard()
@@ -23,10 +24,15 @@ class ImguiStateGuard {
         color_(ui::guiColor()),
         contentColor_(ui::guiContentColor()),
         fontSize_(ui::styleFontSize(style_)),
-        alignment_(ui::styleAlignment(style_)) {
+        alignment_(ui::styleAlignment(style_)),
+        font_(defaultFont()) {
     ui::setStyleAlignment(style_, ui::TEXT_ANCHOR_MIDDLE_CENTER);
+    ui::ManagedObject gameFont = findGameFont();
+    logGameFont(gameFont);
+    if (gameFont != nullptr) setDefaultFont(gameFont);
   }
   ~ImguiStateGuard() {
+    setDefaultFont(font_);
     ui::setGuiColor(color_);
     ui::setGuiContentColor(contentColor_);
     ui::setStyleFontSize(style_, fontSize_);
@@ -43,6 +49,7 @@ class ImguiStateGuard {
   ui::Color contentColor_;
   int32_t fontSize_;
   int32_t alignment_;
+  ui::ManagedObject font_;
 };
 
 /// 一帧的绘制上下文

@@ -26,12 +26,21 @@ constexpr float BOSS_SCAN_SECONDS = 5.0f;  // 标题出现后 BOSS 可能晚一�
 
 inline float g_bossScanUntil = 0.0f;
 
+/// TypeInfo 槽里的 Il2CppClass*（类还没被用到时为 null）
+inline const void* classOf(uintptr_t typeSlot) {
+  return *reinterpret_cast<const void* const*>(exl::util::modules::GetTargetOffset(typeSlot));
+}
+
+/// 类的 static_fields；类还没初始化（静态构造未完成）时返回 null
+inline const void* staticFieldsOf(uintptr_t typeSlot) {
+  const void* klass = classOf(typeSlot);
+  if (klass == nullptr || unity::readField<int32_t>(klass, IL2CPP_CLASS_CCTOR_FINISHED) == 0) return nullptr;
+  return unity::readField<const void*>(klass, IL2CPP_CLASS_STATIC_FIELDS);
+}
+
 /// HealthManager._activeHealthManagers（List<HealthManager>）；类还没初始化时返回 null
 inline const void* activeHealthManagers() {
-  const auto* slot = reinterpret_cast<const void* const*>(exl::util::modules::GetTargetOffset(HM_TYPEINFO));
-  const void* klass = *slot;
-  if (klass == nullptr || unity::readField<int32_t>(klass, IL2CPP_CLASS_CCTOR_FINISHED) == 0) return nullptr;
-  const void* statics = unity::readField<const void*>(klass, IL2CPP_CLASS_STATIC_FIELDS);
+  const void* statics = staticFieldsOf(HM_TYPEINFO);
   return statics != nullptr ? unity::readField<const void*>(statics, HM_ACTIVELIST_STATIC) : nullptr;
 }
 

@@ -181,6 +181,32 @@ static void testRetryThrottle() {
   CHECK(!throttle.tryAcquire(TEXTURE_RETRY_SECONDS + 0.1f));
 }
 
+static void testPlaceholderHp() {
+  std::printf("test: 占位血量（SetHP 大数）不计入上限、期间不画，真实血量出现后抬高上限\n");
+  CHECK(!isPlaceholderHp(3000));
+  CHECK(isPlaceholderHp(9999));
+  CHECK(pickMaxHp(9999, 800) == 800);
+  CHECK(pickMaxHp(800, 9999) == 800);
+  CHECK(pickMaxHp(600, 800) == 800);
+  CHECK(pickMaxHp(9999, 5000) == 9999);
+  HudModel model;
+  int boss = 0;
+  model.onHit(&boss, 9999, 1.0f);  // 标题出现时扫到：还在占位段
+  Enemy& enemy = model.enemies()[0];
+  CHECK(enemy.active && enemy.isBossStyle && enemy.maxHp == 0);
+  CHECK(!isDrawable(enemy, 9999));
+  model.expire(1.0f + HIDE_DELAY_SECONDS * 100.0f);  // BOSS 样式不按时间过期
+  CHECK(enemy.active);
+  CHECK(!raiseMaxHp(enemy, 9999));
+  CHECK(raiseMaxHp(enemy, 800));  // FSM 设了真实血量
+  CHECK(enemy.maxHp == 800 && isDrawable(enemy, 800));
+  CHECK(!raiseMaxHp(enemy, 500));
+  CHECK(!raiseMaxHp(enemy, 9999));  // 阶段间又设回占位：上限不变、不画
+  CHECK(enemy.maxHp == 800 && !isDrawable(enemy, 9999));
+  model.onHit(&boss, 9999, 2.0f);
+  CHECK(enemy.maxHp == 800);
+}
+
 int main() {
   std::printf("=== HUD 模型测试 ===\n");
   testSameEnemyReusesSlot();
@@ -189,6 +215,7 @@ int main() {
   testBossBarDoesNotTimeOut();
   testForget();
   testBossThreshold();
+  testPlaceholderHp();
   testBossBarLayout();
   testFillRect();
   testHealthRatio();
