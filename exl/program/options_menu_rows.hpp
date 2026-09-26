@@ -67,7 +67,7 @@ inline void shiftFollowers(const Placement& plan) {
     const ui::Vector3 p = localPositionOf(child);
     const float along = (p.x - plan.anchorPos.x) * plan.step.x + (p.y - plan.anchorPos.y) * plan.step.y;
     if (along <= 0.0f) continue;
-    setLocalPosition(child, offset(p, plan.step, static_cast<float>(toggles::FEATURE_COUNT)));
+    setLocalPosition(child, offset(p, plan.step, static_cast<float>(ROW_COUNT)));
     char name[NAME_CAPACITY];
     Logging.Log("[sshud] options: shifted %s from (%.1f,%.1f)", nameOf(child, name, sizeof(name)), p.x, p.y);
   }
@@ -103,17 +103,17 @@ inline void relabel(ui::ManagedObject option, ui::ManagedObject rowTr, const cha
   if (!isLabelled) Logging.Log("[sshud] options: no label text found (%zu localizers)", count);
 }
 
-/// 在内容容器里克隆第 feature 行并改造好；失败返回空行（已建的半成品会销毁）
-inline InjectedRow createRow(ui::ManagedObject templateOption, const Placement& plan, size_t feature,
+/// 在内容容器里克隆第 row 行（options_menu_model.hpp 的行序）并改造好；失败返回空行（已建的半成品会销毁）
+inline InjectedRow createRow(ui::ManagedObject templateOption, const Placement& plan, size_t rowIndex,
                              int32_t language) {
   InjectedRow made;
   ui::ManagedObject row = call<ui::ManagedObject>(UOBJ_INSTANTIATE, gameObjectOf(rowOf(templateOption)), plan.content, false);
   if (row == nullptr) return made;
   char name[NAME_CAPACITY];
-  std::snprintf(name, sizeof(name), "sshud_opt_%s", toggles::FEATURES[feature].key);
+  std::snprintf(name, sizeof(name), "sshud_opt_%s", rowKey(rowIndex));
   call<void>(UOBJ_SETNAME, row, map::managedString(name));
   ui::ManagedObject rowTr = transformOf(row);
-  const int32_t order = static_cast<int32_t>(feature) + 1;
+  const int32_t order = static_cast<int32_t>(rowIndex) + 1;
   setSiblingIndex(rowTr, plan.anchorSibling + order);
   if (!plan.hasLayout && plan.hasStep) setLocalPosition(rowTr, offset(plan.anchorPos, plan.step, static_cast<float>(order)));
   ui::ManagedObject option = findInTree(rowTr, "MenuOptionHorizontal");
@@ -123,18 +123,19 @@ inline InjectedRow createRow(ui::ManagedObject templateOption, const Placement& 
     return made;
   }
   detachFromGameSettings(option, rowTr);
-  relabel(option, rowTr, labelFor(feature, language));
+  relabel(option, rowTr, labelFor(rowIndex, language));
   made = {row, option, ui::pinObject(row), ui::pinObject(option)};
   return made;
 }
 
-/// 把开关当前值刷到各行
+/// 把开关与起始纹章的当前值刷到各行（纹章行只有换好 9 项列表后才会存在，见 options_menu.hpp）
 inline void syncRows(const InjectedRow* rows, int32_t onIndex) {
   for (size_t i = 0; i < toggles::FEATURE_COUNT; ++i) {
     if (!ui::isAlive(rows[i].option)) continue;
     const bool isOn = toggles::g_settings.enabled[i];
     setOptionTo(rows[i].option, isOn ? onIndex : 1 - onIndex);
   }
+  if (ui::isAlive(rows[CREST_ROW].option)) setOptionTo(rows[CREST_ROW].option, toggles::g_settings.startCrest);
 }
 
 }  // namespace sshud::options

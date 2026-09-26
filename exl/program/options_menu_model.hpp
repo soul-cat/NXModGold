@@ -21,19 +21,28 @@ constexpr int32_t LANGUAGE_ZH_SG = 203;
 constexpr size_t TOGGLE_OPTION_COUNT = 2;  // 模板行必须恰好两个选项（开 / 关）
 constexpr int32_t FALLBACK_ON_INDEX = 1;   // 认不出键名时按"0 关 1 开"猜
 
-/// 行标签，顺序同 toggles::FEATURES
-constexpr const char16_t* LABELS_ZH[toggles::FEATURE_COUNT] = {u"小怪血条", u"BOSS 血条", u"伤害数字", u"地图收集物",
-                                                                u"R3 快捷面板", u"送货不损坏"};
-constexpr const char16_t* LABELS_EN[toggles::FEATURE_COUNT] = {u"Enemy HP Bars", u"Boss HP Bar", u"Damage Numbers",
-                                                                u"Map Collectibles", u"R3 Quick Panel",
-                                                                u"Unbreakable Deliveries"};
+/// 注入的行：先是 toggles::FEATURES 各一行开 / 关，最后一行是新存档起始纹章（9 选 1，start_crest.hpp）
+constexpr size_t ROW_COUNT = toggles::FEATURE_COUNT + 1;
+constexpr size_t CREST_ROW = toggles::FEATURE_COUNT;
+
+/// 行标签，顺序同上
+constexpr const char16_t* LABELS_ZH[ROW_COUNT] = {u"小怪血条",    u"BOSS 血条",   u"伤害数字",      u"地图收集物",
+                                                  u"R3 快捷面板", u"送货不损坏", u"新存档起始纹章"};
+constexpr const char16_t* LABELS_EN[ROW_COUNT] = {u"Enemy HP Bars",          u"Boss HP Bar",   u"Damage Numbers",
+                                                  u"Map Collectibles",       u"R3 Quick Panel",
+                                                  u"Unbreakable Deliveries", u"Starting Crest (New Saves)"};
+
+/// 行在 config.ini 里的键名（也用于克隆行的 GameObject 名）
+inline const char* rowKey(size_t row) {
+  return row < toggles::FEATURE_COUNT ? toggles::FEATURES[row].key : toggles::START_CREST_KEY;
+}
 
 inline bool isSimplifiedChinese(int32_t languageCode) {
   return languageCode == LANGUAGE_ZH || languageCode == LANGUAGE_ZH_CN || languageCode == LANGUAGE_ZH_SG;
 }
 
-inline const char16_t* labelFor(size_t feature, int32_t languageCode) {
-  return isSimplifiedChinese(languageCode) ? LABELS_ZH[feature] : LABELS_EN[feature];
+inline const char16_t* labelFor(size_t row, int32_t languageCode) {
+  return isSimplifiedChinese(languageCode) ? LABELS_ZH[row] : LABELS_EN[row];
 }
 
 struct OnIndex {

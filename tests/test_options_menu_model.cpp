@@ -36,6 +36,14 @@ static void testLabels() {
   CHECK(!isSimplifiedChinese(44));   // EN
   CHECK(labelFor(0, LANGUAGE_ZH) == LABELS_ZH[0]);
   CHECK(labelFor(3, 44) == LABELS_EN[3]);
+  CHECK(labelFor(CREST_ROW, LANGUAGE_ZH) == LABELS_ZH[ROW_COUNT - 1]);
+}
+
+static void testRowKeys() {
+  CHECK(ROW_COUNT == sshud::toggles::FEATURE_COUNT + 1);
+  CHECK(std::strcmp(rowKey(0), "enemy_bars") == 0);
+  CHECK(std::strcmp(rowKey(sshud::toggles::FEATURE_COUNT - 1), "protect_delivery") == 0);
+  CHECK(std::strcmp(rowKey(CREST_ROW), "start_crest") == 0);
 }
 
 static void testAscii() {
@@ -53,6 +61,7 @@ static void testAscii() {
 int main() {
   testOnIndex();
   testLabels();
+  testRowKeys();
   testAscii();
   if (g_failures == 0) std::printf("test_options_menu_model: all passed\n");
   return g_failures == 0 ? 0 : 1;

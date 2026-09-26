@@ -20,7 +20,7 @@ test_map_timing: test_map_timing.cpp ../exl/program/map_timing.hpp
 test_map_refresh_plan: test_map_refresh_plan.cpp ../exl/program/map_refresh_plan.hpp
 	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_map_refresh_plan.cpp
 
-test_options_menu_model: test_options_menu_model.cpp ../exl/program/options_menu_model.hpp ../exl/program/toggles_model.hpp
+test_options_menu_model: test_options_menu_model.cpp ../exl/program/options_menu_model.hpp ../exl/program/toggles_model.hpp ../exl/program/start_crest_model.hpp
 	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_options_menu_model.cpp
 
 test: $(BINS)

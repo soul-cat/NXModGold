@@ -292,6 +292,35 @@
       "field": "hasPinFleaMucklands",
       "required": true,
       "_note": "跳蚤商队猎人卖的该区域原生跳蚤图钉；顺序同 CaravanTroupeHunter.PinGroups / GameMap.fleaPinParents"
+    },
+    {
+      "name": "PD_TOOLEQUIPS",
+      "class": "PlayerData",
+      "field": "ToolEquips",
+      "required": true,
+      "_note": "ToolCrestsData：纹章解锁与槽位；新存档里只解锁 Hunter"
+    },
+    {
+      "name": "PD_CURRENTCRESTID",
+      "class": "PlayerData",
+      "field": "CurrentCrestID",
+      "required": true,
+      "_note": "当前装备的纹章名（string）"
+    },
+    {
+      "name": "TOOLCREST_DISPLAYNAME",
+      "class": "ToolCrest",
+      "field": "displayName",
+      "required": true,
+      "_note": "LocalisedString（值类型，内嵌在对象里）"
+    },
+    {
+      "name": "MOH_LOCALIZETEXT",
+      "class": "MenuOptionHorizontal",
+      "namespace": "UnityEngine.UI",
+      "field": "localizeText",
+      "required": true,
+      "_note": "false 时 optionList 直接当显示文字"
     }
   ],
   "methods": [
@@ -1029,6 +1058,56 @@
       "method": "BreakAllInternal",
       "required": true,
       "_note": "hook：一次碎掉全部（或只碎计时的）送货物品；危险地形重生、以及状态机反射调用的 BreakAllNoEffects / BreakTimedNoEffects"
+    },
+    {
+      "name": "PD_SETUPNEWPLAYERDATA",
+      "class": "PlayerData",
+      "method": "SetupNewPlayerData",
+      "required": true,
+      "_note": "hook：每次 new PlayerData 都跑（读档时随后被存档内容覆盖），只有新存档会保留改动"
+    },
+    {
+      "name": "PD_SETSTRING",
+      "class": "PlayerData",
+      "method": "SetString",
+      "signature_contains": "SetString(string stringName, string value)",
+      "required": true
+    },
+    {
+      "name": "GAMEMGR_STARTACT3",
+      "class": "GameManager",
+      "method": "StartAct3",
+      "required": true,
+      "_note": "hook：第三幕开头强制装备猎人纹章（最高等级）"
+    },
+    {
+      "name": "TIM_AUTOEQUIPCREST",
+      "class": "ToolItemManager",
+      "method": "AutoEquip",
+      "signature_contains": "AutoEquip(ToolCrest crest, bool markTemp, bool removeTools)",
+      "required": true
+    },
+    {
+      "name": "TIM_GETCRESTBYNAME",
+      "class": "ToolItemManager",
+      "method": "GetCrestByName",
+      "required": true,
+      "_note": "管理器不存在时返回 null（反汇编：SilentInstance）"
+    },
+    {
+      "name": "TOOLCREST_GETISUNLOCKED",
+      "class": "ToolCrest",
+      "method": "get_IsUnlocked",
+      "required": true
+    },
+    {
+      "name": "STRING_SPLIT_CHAR",
+      "class": "String",
+      "namespace": "System",
+      "method": "Split",
+      "signature_contains": "Split(char separator, StringSplitOptions options",
+      "required": true,
+      "_note": "借它分配托管 string[]（选项列表）"
     }
   ],
   "script": [
@@ -1077,6 +1156,16 @@
       "kind": "first_bl_in",
       "script_name": "UnityEngine.Events.UnityEvent<Color>$$GetDelegate",
       "_note": "il2cpp_codegen_object_new：该方法第一条 BL 就是 new（HealthManager.OnEnable 里 ldr TypeInfo; bl 同一地址 核实）"
+    },
+    {
+      "name": "SNL_CRESTDATA_SETDATA",
+      "kind": "method",
+      "script_name": "SerializableNamedList<ToolCrestsData.Data, object>$$SetData"
+    },
+    {
+      "name": "SNL_CRESTDATA_SETDATA_MI",
+      "kind": "metadata_slot",
+      "script_name": "Method$SerializableNamedList<ToolCrestsData.Data, ToolCrestsData.NamedData>.SetData()"
     }
   ]
 }

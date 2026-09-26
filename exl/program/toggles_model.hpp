@@ -45,6 +45,10 @@ constexpr FeatureInfo FEATURES[FEATURE_COUNT] = {
     {0, "protect_delivery"},  // 送货物品不损坏（delivery_guard.hpp）
 };
 
+// 新存档起始纹章（start_crest.hpp）：config.ini 里存下标，顺序见 start_crest_model.hpp 的 CREST_IDS
+constexpr const char* START_CREST_KEY = "start_crest";
+constexpr int32_t START_CREST_COUNT = 9;
+
 constexpr const char* CONFIG_HEADER =
     "# sshud feature toggles: 1 = on, 0 = off (in game: Options > Game, or hold R3 + D-pad)\n";
 constexpr size_t CONFIG_TEXT_CAPACITY = 512;
@@ -54,6 +58,7 @@ inline const FeatureInfo& infoOf(Feature feature) { return FEATURES[static_cast<
 
 struct Settings {
   bool enabled[FEATURE_COUNT] = {true, true, true, true, true, false};  // 送货保护默认关，其余默认开
+  int32_t startCrest = 0;  // 新存档起始纹章下标，0 = 猎人（游戏原样）
 
   bool isEnabled(Feature feature) const { return enabled[static_cast<size_t>(feature)]; }
   void flip(Feature feature) {
@@ -104,12 +109,28 @@ inline size_t formatSettings(const Settings& settings, char* out, size_t capacit
     std::snprintf(line, sizeof(line), "%s=%d\n", FEATURES[i].key, settings.enabled[i] ? 1 : 0);
     append(line);
   }
+  char crestLine[CONFIG_LINE_CAPACITY];
+  std::snprintf(crestLine, sizeof(crestLine), "%s=%d\n", START_CREST_KEY, settings.startCrest);
+  append(crestLine);
   return length;
 }
 
 namespace detail {
 
 inline bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\r'; }
+
+inline bool isKey(const char* key, const char* begin, size_t length) {
+  return std::strlen(key) == length && std::memcmp(key, begin, length) == 0;
+}
+
+/// 一位数字的值（后面只能跟空白）；不是返回 -1
+inline int32_t singleDigit(const char* value, const char* end) {
+  if (value == end || *value < '0' || *value > '9') return -1;
+  for (const char* rest = value + 1; rest < end; ++rest) {
+    if (!isSpace(*rest)) return -1;
+  }
+  return *value - '0';
+}
 
 /// 解析一行 "key = value"；不认识的键、注释、坏值都忽略
 inline void parseLine(const char* begin, const char* end, Settings& settings) {
@@ -120,12 +141,15 @@ inline void parseLine(const char* begin, const char* end, Settings& settings) {
   while (keyEnd > begin && isSpace(keyEnd[-1])) --keyEnd;
   const char* value = equals + 1;
   while (value < end && isSpace(*value)) ++value;
-  if (value == end || (*value != '0' && *value != '1')) return;
   const size_t keyLength = static_cast<size_t>(keyEnd - begin);
+  const int32_t digit = singleDigit(value, end);
+  if (isKey(START_CREST_KEY, begin, keyLength)) {
+    if (digit >= 0 && digit < START_CREST_COUNT) settings.startCrest = digit;
+    return;
+  }
+  if (digit != 0 && digit != 1) return;
   for (size_t i = 0; i < FEATURE_COUNT; ++i) {
-    if (std::strlen(FEATURES[i].key) == keyLength && std::memcmp(FEATURES[i].key, begin, keyLength) == 0) {
-      settings.enabled[i] = *value == '1';
-    }
+    if (isKey(FEATURES[i].key, begin, keyLength)) settings.enabled[i] = digit == 1;
   }
 }
 

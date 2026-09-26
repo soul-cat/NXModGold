@@ -141,7 +141,8 @@ static void testFormatSettingsDefaults() {
       "damage_numbers=1\n"
       "map_markers=1\n"
       "quick_panel=1\n"
-      "protect_delivery=0\n";
+      "protect_delivery=0\n"
+      "start_crest=0\n";
   CHECK(std::strcmp(text, expected) == 0);
   CHECK(length == std::strlen(expected));
 }
@@ -208,6 +209,24 @@ static void testParseIgnoresUnknownAndBadValues() {
   CHECK(settings.isEnabled(Feature::MapMarkers));
 }
 
+static void testParseStartCrest() {
+  std::printf("test: start_crest 只认 0..8 的一位数，坏值保留原值，能往返\n");
+  Settings settings;
+  CHECK(settings.startCrest == 0);
+  parseText("start_crest=3\n", settings);
+  CHECK(settings.startCrest == 3);
+  parseText("start_crest=9\nstart_crest=12\nstart_crest=x\nstart_crest=\nstart_crest=-1\n", settings);
+  CHECK(settings.startCrest == 3);
+  parseText("start_crest = 8 \r\n", settings);
+  CHECK(settings.startCrest == 8);
+  char text[CONFIG_TEXT_CAPACITY];
+  const size_t length = formatSettings(settings, text, sizeof(text));
+  Settings parsed;
+  parseSettings(text, length, parsed);
+  CHECK(parsed.startCrest == 8);
+  CHECK(isSameSettings(settings, parsed));
+}
+
 static void testParseMissingTrailingNewline() {
   std::printf("test: 最后一行没有换行也能解析\n");
   Settings settings;
@@ -262,6 +281,7 @@ int main() {
   testParseIgnoresComments();
   testParseIgnoresUnknownAndBadValues();
   testParseMissingTrailingNewline();
+  testParseStartCrest();
   testParseAbsentKeysKeepPrior();
   testParseKeyMustMatchExactly();
   if (g_failed) {
