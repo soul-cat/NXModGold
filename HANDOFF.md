@@ -25,6 +25,8 @@
 | 已收集物品刷新 | 同一房间刚捡的物品开图即消失（刷新前调 `GameManager.SaveLevelState`，`4a652f1`） |
 | R3 开关面板 | 中文贴图文字，设置写回 `config.ini` |
 | 原生选项页开关 | 克隆「选项 → 游戏」的开/关行插四行；实机日志：6 个原生行、布局组自动排版、缺字 0、导航接在 `BackerOption` 与 `DefaultsButton` 之间（`ff49964`）；第五行 R3 快捷面板开关；第六行送货不损坏（hook `DeliveryQuestItem.TakeHitForItem` / `BreakAllInternal`，实机日志：挨打、危险地形重生、计时掉耐久均被拦下，钟兽 / 电梯可正常乘坐） |
+| 新存档起始纹章 | 移植 PC 版 StartCrestSelector：`StartNewGame` 期间的 `SetupNewPlayerData` 之后锁 Hunter、解锁所选、设 `CurrentCrestID`；`StartAct3` 期间 `AutoEquip` 遇到未解锁纹章换成当前纹章（未实机验证，要到第三幕）。`SetupNewPlayerData` 反序列化后也会被调，所以必须限定在 `StartNewGame` 里。实机：萨满开局正常；Cursed / Cloakless 没有可用译名，用内置后备名 |
+| 选项页排版 | Content 高 766、行距 105、上边距 50；12 行时行距 84、整页缩放 0.763（`fitLayout`）。不要对 Content 往上的节点调 RectTransform 接口：`_UIManager` 是普通 Transform，调了读到垃圾，曾导致离开页面时闪退 |
 | 原生跳蚤图钉去重 | 实机日志：6 组 29 个图钉，名字即跳蚤存档键，`parentScene` 全空；按名字匹配，重复的 6 个跳蚤标记隐藏（`e8337ab`） |
 | 存档导入 / 导出 | 导入 `user1..4.dat`（含备份与 `.done` 改名）；导出整个 `save:/` |
 | 开图卡顿修复 | 原来每次开图约 330 ms 卡顿；场景查询改为跨刷新缓存（`c7dded7`），托管字符串钉住复用、日志只在变化时写（`1b24c4d`） |
