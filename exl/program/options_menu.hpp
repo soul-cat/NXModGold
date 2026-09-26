@@ -50,6 +50,7 @@ inline void inject(MenuState& state, ui::ManagedObject screen) {
   state.list = scan.list;
   state.content = plan.content;
   state.maxSpacing = spacingOf(plan.content);
+  state.contentPos = localPositionOf(plan.content);
   state.listPin = ui::pinObject(scan.list);
   std::copy(scan.options, scan.options + scan.optionCount, state.originals);
   state.originalCount = scan.optionCount;
@@ -76,8 +77,6 @@ inline void prepareScreen(ui::ManagedObject uiManager) {
     if (g_menu.isInjected) Logging.Log("[sshud] options: screen rebuilt, re-injecting");
     g_menu.discard();
     inject(g_menu, screen);
-  } else {
-    logLayoutOnce(g_menu.content);  // 第二次打开时上次的布局已经算过
   }
   syncRows(g_menu.rows, g_menu.onIndex);
 }
@@ -102,7 +101,6 @@ inline void applyCrestChange(int32_t index) {
 inline void applyRowChange(const MenuState& state, ui::ManagedObject option) {
   for (size_t i = 0; i < ROW_COUNT; ++i) {
     if (state.rows[i].option != option) continue;
-    logLayoutOnce(state.content);  // 页面正显示着，布局已经算过
     const int32_t selected = ui::readField<int32_t>(option, MOH_SELECTEDINDEX);
     if (i == CREST_ROW) return applyCrestChange(selected);
     return applyFeatureChange(i, selected == state.onIndex);
@@ -123,7 +121,8 @@ HOOK_DEFINE_TRAMPOLINE(MenuListSetupActiveHook) {
     Orig(self, method);
     namespace options = sshud::options;
     options::spliceNavigation(options::g_menu, self);
-    if (self == options::g_menu.list) options::fitRowSpacing(options::g_menu.content, options::g_menu.maxSpacing);
+    const options::MenuState& menu = options::g_menu;
+    if (self == menu.list) options::fitRows(menu.content, menu.maxSpacing, menu.contentPos);
   }
 };
 

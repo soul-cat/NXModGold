@@ -1115,23 +1115,7 @@
       "namespace": "UnityEngine",
       "method": "get_rect",
       "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
-    },
-    {
-      "name": "RT_GETSIZEDELTA",
-      "class": "RectTransform",
-      "namespace": "UnityEngine",
-      "method": "get_sizeDelta",
-      "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
-    },
-    {
-      "name": "RT_GETANCHOREDPOS",
-      "class": "RectTransform",
-      "namespace": "UnityEngine",
-      "method": "get_anchoredPosition",
-      "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
+      "_note": "选项页排版（options_menu_layout.hpp）"
     },
     {
       "name": "HVLG_GETSPACING",
@@ -1139,23 +1123,7 @@
       "namespace": "UnityEngine.UI",
       "method": "get_spacing",
       "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
-    },
-    {
-      "name": "HVLG_GETCONTROLHEIGHT",
-      "class": "HorizontalOrVerticalLayoutGroup",
-      "namespace": "UnityEngine.UI",
-      "method": "get_childControlHeight",
-      "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
-    },
-    {
-      "name": "HVLG_GETFORCEEXPANDHEIGHT",
-      "class": "HorizontalOrVerticalLayoutGroup",
-      "namespace": "UnityEngine.UI",
-      "method": "get_childForceExpandHeight",
-      "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
+      "_note": "选项页排版（options_menu_layout.hpp）"
     },
     {
       "name": "LG_GETPADDING",
@@ -1163,7 +1131,7 @@
       "namespace": "UnityEngine.UI",
       "method": "get_padding",
       "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
+      "_note": "选项页排版（options_menu_layout.hpp）"
     },
     {
       "name": "RECTOFFSET_GETTOP",
@@ -1171,23 +1139,7 @@
       "namespace": "UnityEngine",
       "method": "get_top",
       "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
-    },
-    {
-      "name": "RECTOFFSET_GETBOTTOM",
-      "class": "RectOffset",
-      "namespace": "UnityEngine",
-      "method": "get_bottom",
-      "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
-    },
-    {
-      "name": "LE_GETPREFERREDHEIGHT",
-      "class": "LayoutElement",
-      "namespace": "UnityEngine.UI",
-      "method": "get_preferredHeight",
-      "required": true,
-      "_note": "选项页排版诊断（options_menu_layout.hpp）"
+      "_note": "选项页排版（options_menu_layout.hpp）"
     },
     {
       "name": "HVLG_SETSPACING",

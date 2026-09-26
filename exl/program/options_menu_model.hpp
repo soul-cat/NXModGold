@@ -45,6 +45,27 @@ inline const char16_t* labelFor(size_t row, int32_t languageCode) {
   return isSimplifiedChinese(languageCode) ? LABELS_ZH[row] : LABELS_EN[row];
 }
 
+// ---------------------------------------------------------------- 排版
+constexpr float LAYOUT_BOTTOM_MARGIN = 30.0f;  // 最后一行离容器底边留的空（行本身高 0，文字以行位置为中心）
+constexpr float MIN_SPACING_RATIO = 0.8f;      // 行距最多压到原来的这个比例，再小文字就叠在一起了
+
+/// 行距与整体缩放：放得下就原样；否则先压行距（不低于原来的 MIN_SPACING_RATIO），还放不下再等比缩小
+struct LayoutFit {
+  float spacing;
+  float scale;
+};
+
+inline LayoutFit fitLayout(int32_t rows, float height, float top, float maxSpacing) {
+  if (rows < 2 || maxSpacing <= 0.0f || height <= 0.0f) return {maxSpacing, 1.0f};
+  const float gaps = static_cast<float>(rows - 1);
+  const float fit = (height - top - LAYOUT_BOTTOM_MARGIN) / gaps;
+  if (fit >= maxSpacing) return {maxSpacing, 1.0f};
+  const float minSpacing = maxSpacing * MIN_SPACING_RATIO;
+  const float spacing = fit > minSpacing ? fit : minSpacing;
+  const float needed = top + gaps * spacing + LAYOUT_BOTTOM_MARGIN;
+  return {spacing, needed > height ? height / needed : 1.0f};
+}
+
 struct OnIndex {
   int32_t index = FALLBACK_ON_INDEX;
   bool isCertain = false;  // false：两个键都认不出，用的是猜的
