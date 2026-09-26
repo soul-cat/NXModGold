@@ -8,7 +8,7 @@ BINS = test_hud_model test_toggles test_map_timing test_map_refresh_plan test_op
 .PHONY: all test clean
 all: $(BINS)
 
-test_hud_model: test_hud_model.cpp ../exl/program/hud_model.hpp
+test_hud_model: test_hud_model.cpp ../exl/program/hud_model.hpp ../exl/program/hud_phase_model.hpp
 	$(CXX) $(CXXFLAGS) $(SANFLAGS) -o $@ test_hud_model.cpp
 
 test_toggles: test_toggles.cpp ../exl/program/toggles_model.hpp

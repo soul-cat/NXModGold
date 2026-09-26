@@ -197,35 +197,96 @@ static void testPlaceholderHp() {
   CHECK(!isDrawable(enemy, 9999));
   model.expire(1.0f + HIDE_DELAY_SECONDS * 100.0f);  // BOSS 样式不按时间过期
   CHECK(enemy.active);
-  CHECK(!observeHp(enemy, 9999));
-  CHECK(observeHp(enemy, 800));  // FSM 设了真实血量
+  CHECK(!observeHp(enemy, 9999, 9999));
+  CHECK(observeHp(enemy, 800, 9999));  // FSM 设了真实血量
   CHECK(enemy.maxHp == 800 && isDrawable(enemy, 800));
-  CHECK(!observeHp(enemy, 500));
-  CHECK(!observeHp(enemy, 9999));  // 阶段间又设回占位：不画
+  CHECK(!observeHp(enemy, 500, 9999));
+  CHECK(!observeHp(enemy, 9999, 9999));  // 阶段间又设回占位：不画
   CHECK(!isDrawable(enemy, 9999));
-  CHECK(observeHp(enemy, 600));  // 占位段之后：新阶段
+  CHECK(observeHp(enemy, 600, 9999));  // 占位段之后：新阶段
   CHECK(enemy.maxHp == 600);
 }
 
-static void testPhasedBoss() {
-  std::printf("test: 分阶段设血量的 BOSS（苍白之母）：上限不用 initHp，打空后新阶段上限重设\n");
+static void testSegmentedBoss() {
+  std::printf("test: 分段设血量的 BOSS（苍白之母，实测序列）：按 initHp 显示整场一条，段间不消失\n");
   HudModel model;
   int boss = 0;
-  model.onHit(&boss, 1204, 100, 1.0f);  // initHp 是预制体上的 1204，实际这阶段 100 血
+  model.onHit(&boss, 1204, 100, 1.0f);  // 第一刀：打前 100（这一段），initHp 1204
   Enemy& enemy = model.enemies()[0];
   CHECK(enemy.isBossStyle && enemy.maxHp == 100);
-  CHECK(!observeHp(enemy, 91));
-  CHECK(!observeHp(enemy, 0));  // 打空：readPresence 给 Hidden，槽位留着
-  CHECK(observeHp(enemy, 213));  // FSM 设下一阶段
-  CHECK(enemy.maxHp == 213);
-  CHECK(!observeHp(enemy, 150));
-  CHECK(!observeHp(enemy, 160));  // 小幅回血：不算新阶段
-  CHECK(enemy.maxHp == 213);
-  CHECK(observeHp(enemy, 300));  // 超过上限：抬高
+  observeHp(enemy, 91, 1204);
+  CHECK(enemy.totalHp == 1204 && enemy.damageTaken == 9);
+  CHECK(hpView(enemy, 91).hp == 1195 && hpView(enemy, 91).maxHp == 1204);
+  observeHp(enemy, -1, 1204);  // 打穿一段
+  observeHp(enemy, 182, 1204);  // FSM 设下一段：累计不回升
+  CHECK(enemy.damageTaken == 101 && hpView(enemy, 182).hp == 1103);
+  observeHp(enemy, -4, 1204);
+  observeHp(enemy, -13, 1204);  // 段间又挨了一刀
+  CHECK(enemy.damageTaken == 101 + 186 + 9);
+  CHECK(isDrawable(enemy, -13));
+  observeHp(enemy, 9999, 1204);  // 占位值不算掉血也不算回血
+  observeHp(enemy, 97, 1204);
+  CHECK(enemy.damageTaken == 296);
+  for (int i = 0; i < 20; ++i) observeHp(enemy, 97 - 60 * (i % 2), 1204);  // 伪造回血不应让显示回升
+  CHECK(hpView(enemy, 37).hp >= 0);
+}
+
+static void testNormalBossNotSegmented() {
+  std::printf("test: 普通 BOSS（initHp = 起始血量）按实时血量显示；普通敌人按 initHp 显示上限\n");
+  HudModel model;
+  int boss = 0;
+  model.onHit(&boss, 500, 500, 1.0f);
+  Enemy& enemy = model.enemies()[0];
+  observeHp(enemy, 480, 500);
+  CHECK(enemy.totalHp == 0 && hpView(enemy, 480).hp == 480 && hpView(enemy, 480).maxHp == 500);
+  observeHp(enemy, 0, 500);
+  CHECK(observeHp(enemy, 300, 500));  // 打空后又被设了血：新一段
   CHECK(enemy.maxHp == 300);
   int grunt = 0;
   model.onHit(&grunt, 50, 20, 1.0f);  // 普通敌人：之前被打过也按 initHp 显示上限
   CHECK(model.enemies()[1].maxHp == 50 && !model.enemies()[1].isBossStyle);
+}
+
+static void testPhasePlan() {
+  std::printf("test: 苍白之母段表（FSM Phase Control）：剩余 = 当前血量 + 后面各段，整场单调下降\n");
+  CHECK(phaseNumberOf("P1 HP") == 1 && phaseNumberOf("P6 HP") == 6);
+  CHECK(phaseNumberOf("P9 HP") == 0 && phaseNumberOf("P1 HPX") == 0 && phaseNumberOf("Hits Total") == 0);
+  PhasePlan plan;
+  const int32_t silk[] = {100, 192, 240, 110, 242, 340};
+  for (int32_t v : silk) plan.hp[plan.count++] = v;
+  CHECK(phaseSum(plan, 0) == 1224);
+  CHECK(isChunkPlan(plan, 1204));
+  PhasePlan thresholds;  // 阈值式：P2 HP = 剩 600 进二阶段
+  thresholds.hp[0] = 1000;
+  thresholds.hp[1] = 600;
+  thresholds.count = 2;
+  CHECK(!isChunkPlan(thresholds, 1000));
+  PhasePlan gap;  // 编号不连续：中间一段为 0
+  gap.hp[0] = 100;
+  gap.hp[2] = 100;
+  gap.count = 3;
+  CHECK(!isChunkPlan(gap, 200));
+
+  HudModel model;
+  int boss = 0;
+  model.onHit(&boss, 1204, 100, 1.0f);
+  Enemy& enemy = model.enemies()[0];
+  observeHp(enemy, 91, 1204);
+  enemy.phases = plan;  // 运行时由 readPhasePlan 填
+  CHECK(hpView(enemy, 91).hp == 91 + 1124 && hpView(enemy, 91).maxHp == 1224);
+  // 日志里的真实序列：打穿后 AddHP 下一段（溢出从下一段扣），也有同一帧先挨刀再加血的
+  const int32_t seq[] = {11, -1, 182, 5, 236, 14, -1, -13, 97, 20, 0, 231, 2, -1, 324, 86};  // 5 → 236：同帧 −9 +240
+  int32_t lastShown = hpView(enemy, 91).hp;
+  bool isMonotonic = true;
+  for (int32_t hp : seq) {
+    observeHp(enemy, hp, 1204);
+    const int32_t shown = hpView(enemy, hp).hp;
+    isMonotonic = isMonotonic && shown <= lastShown;
+    lastShown = shown;
+  }
+  CHECK(isMonotonic);
+  CHECK(enemy.phaseIndex == 5);
+  CHECK(hpView(enemy, 0).hp == 0);  // 最后一段打空 = 整条空
 }
 
 int main() {
@@ -237,7 +298,9 @@ int main() {
   testForget();
   testBossThreshold();
   testPlaceholderHp();
-  testPhasedBoss();
+  testSegmentedBoss();
+  testNormalBossNotSegmented();
+  testPhasePlan();
   testBossBarLayout();
   testFillRect();
   testHealthRatio();

@@ -10,6 +10,7 @@
 
 #include "bar_textures.hpp"
 #include "hud_boss_log.hpp"
+#include "hud_boss_phases.hpp"
 #include "hud_frame.hpp"
 #include "hud_model.hpp"
 #include "hud_text_cache.hpp"
@@ -70,18 +71,18 @@ inline void drawTexturedBossBar(const Rect& bar, float ratio, const BossBarTextu
   ui::setGuiColor(COLOR_TEXT_WHITE);
 }
 
-/// 一个要画的敌人：模型槽位下标（文字缓存按它索引）+ 本帧读到的血量
+/// 一个要画的敌人：模型槽位下标（文字缓存按它索引）+ 本帧要显示的血量与上限
 struct LiveEnemy {
   const Enemy& enemy;
   int slot;
-  int32_t hp;
+  HpView view;
 };
 
 inline void drawBoss(const Frame& frame, const LiveEnemy& live, int index) {
   const Rect bar = bossBarRect(index, frame.width, frame.height);
   const float scale = uiScale(frame.width, frame.height);
   const float centerX = bar.x + bar.width * 0.5f;
-  const float ratio = healthRatio(live.hp, live.enemy.maxHp);
+  const float ratio = healthRatio(live.view.hp, live.view.maxHp);
   if (const BossBarTextures* textures = bossBarTextures(frame.now)) {
     drawTexturedBossBar(bar, ratio, *textures);
   } else {
@@ -89,7 +90,7 @@ inline void drawBoss(const Frame& frame, const LiveEnemy& live, int index) {
   }
   const ui::Color numbersColor = ratio < LOW_HEALTH_RATIO ? COLOR_TEXT_WHITE : COLOR_TEXT_DARK;
   drawText(frame, centerX, bar.y + bar.height * 0.5f, BOSS_NUMBERS_FONT * scale,
-           healthTextFor(live.slot, live.hp, live.enemy.maxHp), numbersColor);
+           healthTextFor(live.slot, live.view.hp, live.view.maxHp), numbersColor);
   drawText(frame, centerX, bar.y - BOSS_NAME_GAP * scale, BOSS_NAME_FONT * scale,
            bossNameFor(live.slot, live.enemy.manager), COLOR_TEXT_WHITE);
 }
@@ -102,12 +103,12 @@ inline void drawEnemy(const Frame& frame, const LiveEnemy& live) {
   if (!project(frame, anchor, x, y)) return;
   const float ppu = pixelsPerUnit(frame, anchor, x);
   if (ppu <= 0.0f) return;
-  const float ratio = healthRatio(live.hp, live.enemy.maxHp);
+  const float ratio = healthRatio(live.view.hp, live.view.maxHp);
   const Rect bar = enemyBarRect(x, y, ppu);
   drawBar(frame, bar, ratio, COLOR_ENEMY_BG);
   const ui::Color textColor = ratio < LOW_HEALTH_RATIO ? COLOR_TEXT_WHITE : COLOR_TEXT_DARK;
   drawText(frame, x, bar.y - ENEMY_NUMBERS_GAP_UNITS * ppu, ENEMY_NUMBERS_FONT_UNITS * ppu,
-           healthTextFor(live.slot, live.hp, live.enemy.maxHp), textColor);
+           healthTextFor(live.slot, live.view.hp, live.view.maxHp), textColor);
 }
 
 inline void drawPopup(const Frame& frame, const Popup& popup, int slot) {
@@ -126,11 +127,12 @@ inline void drawPopup(const Frame& frame, const Popup& popup, int slot) {
 enum class Presence { Gone, Hidden, Shown };
 
 /// 已销毁 / 死亡 → Gone（调用方 forget）。血量归零或被停用：普通敌人 Gone；BOSS 只是 Hidden，
-/// 分阶段设血量的 BOSS 打空一阶段、或暂时停用后还会回来，槽位与上限要留着
+/// 分段设血量的 BOSS 打空一段、或暂时停用后还会回来，槽位与上限要留着。分段 BOSS 两段之间照常显示整场条
 inline Presence readPresence(const Enemy& enemy, int32_t& outHp) {
   if (!ui::isAlive(enemy.manager) || ui::readField<bool>(enemy.manager, HM_ISDEAD)) return Presence::Gone;
   outHp = ui::readField<int32_t>(enemy.manager, HM_HP);
-  if (outHp > 0 && ui::isActiveInHierarchy(enemy.manager)) return Presence::Shown;  // 托管调用放最后
+  const bool hasHp = outHp > 0 || enemy.totalHp > 0;
+  if (hasHp && ui::isActiveInHierarchy(enemy.manager)) return Presence::Shown;  // 托管调用放最后
   return enemy.isBossStyle ? Presence::Hidden : Presence::Gone;
 }
 
@@ -143,9 +145,12 @@ inline bool updateEnemy(Enemy& enemy, int32_t& outHp) {
   }
   const int32_t previousHp = enemy.lastHp;
   const bool wasHidden = enemy.isHidden;
-  observeHp(enemy, outHp);
+  const bool wasSegmented = enemy.totalHp > 0;
+  const int32_t initHp = ui::readField<int32_t>(enemy.manager, HM_INITHP);
+  observeHp(enemy, outHp, initHp);
+  if (!wasSegmented && enemy.totalHp > 0) enemy.phases = readPhasePlan(enemy.manager, initHp);
   enemy.isHidden = presence == Presence::Hidden || !isDrawable(enemy, outHp);  // 占位段（过场 / 无敌）不画
-  logBossHp(enemy, previousHp, wasHidden);
+  logBossHp(enemy, previousHp, wasHidden, wasSegmented);
   return !enemy.isHidden;
 }
 
@@ -160,9 +165,9 @@ inline void drawEnemies(const Frame& frame, HudModel& model, const toggles::Sett
     int32_t hp = 0;
     if (!updateEnemy(enemy, hp)) continue;
     if (enemy.isBossStyle) {
-      if (isBossBarEnabled) drawBoss(frame, {enemy, i, hp}, bossIndex++);
+      if (isBossBarEnabled) drawBoss(frame, {enemy, i, hpView(enemy, hp)}, bossIndex++);
     } else if (isEnemyBarEnabled) {
-      drawEnemy(frame, {enemy, i, hp});
+      drawEnemy(frame, {enemy, i, hpView(enemy, hp)});
     }
   }
 }

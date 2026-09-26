@@ -342,6 +342,54 @@
       "field": "font",
       "required": true,
       "_note": "游戏按语言给它设 fontNames（系统字库回退）"
+    },
+    {
+      "name": "PMFSM_FSMLIST_STATIC",
+      "class": "PlayMakerFSM",
+      "field": "fsmList",
+      "required": true,
+      "_note": "静态字段：所有 PlayMakerFSM（相对 static_fields）"
+    },
+    {
+      "name": "PMFSM_FSM",
+      "class": "PlayMakerFSM",
+      "field": "fsm",
+      "required": true
+    },
+    {
+      "name": "FSM_NAME",
+      "class": "Fsm",
+      "namespace": "HutongGames.PlayMaker",
+      "field": "name",
+      "required": true
+    },
+    {
+      "name": "FSM_VARIABLES",
+      "class": "Fsm",
+      "namespace": "HutongGames.PlayMaker",
+      "field": "variables",
+      "required": true
+    },
+    {
+      "name": "FSMVARS_INTVARIABLES",
+      "class": "FsmVariables",
+      "namespace": "HutongGames.PlayMaker",
+      "field": "intVariables",
+      "required": true
+    },
+    {
+      "name": "NAMEDVAR_NAME",
+      "class": "NamedVariable",
+      "namespace": "HutongGames.PlayMaker",
+      "field": "name",
+      "required": true
+    },
+    {
+      "name": "FSMINT_VALUE",
+      "class": "FsmInt",
+      "namespace": "HutongGames.PlayMaker",
+      "field": "value",
+      "required": true
     }
   ],
   "methods": [
@@ -1258,6 +1306,11 @@
       "name": "FONT_TYPEINFO",
       "kind": "type_slot",
       "script_name": "UnityEngine.Font_TypeInfo"
+    },
+    {
+      "name": "PMFSM_TYPEINFO",
+      "kind": "type_slot",
+      "script_name": "PlayMakerFSM_TypeInfo"
     }
   ]
 }

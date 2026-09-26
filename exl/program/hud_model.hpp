@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "hud_phase_model.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -64,6 +66,10 @@ struct Enemy {
   bool active = false;
   bool isBossStyle = false;       // 见过的血量（含占位）超过 BOSS 门槛
   bool isHidden = false;          // BOSS 暂时不画（血量归零 / 停用 / 占位段），槽位留着等它回来
+  int32_t totalHp = 0;            // 分段 BOSS 的总血量（= initHp）；0 = 不分段，按实时血量显示
+  int32_t damageTaken = 0;        // 跟踪以来观察到的累计掉血（含打穿到负数的部分）
+  PhasePlan phases;               // 读到了段表时按段显示（count 0 = 没有，退回 totalHp − damageTaken）
+  int phaseIndex = 0;             // 当前是第几段（0 = P1）
 };
 
 struct Popup {
@@ -83,11 +89,24 @@ inline int32_t pickMaxHp(int32_t initHp, int32_t hp) {
   return isPlaceholderHp(initHp) ? hp : initHp;
 }
 
-/// 每帧读到的血量：超过上限就抬高；耗尽（≤ 0）或占位段之后又出现真实血量 = FSM 开始了新阶段，上限重设为它
-/// （苍白之母每阶段用 SetHP 设一两百血，打空后设下一阶段）。返回上限是否变了
-inline bool observeHp(Enemy& enemy, int32_t hp) {
+/// 分段 BOSS：initHp 是真实血量且大于见过的每段血量。苍白之母 initHp 1204，FSM 用 SetHP 一段段设
+/// 100 / 182 / 227 / 97 / 231 / 324…（实测，合计接近 1204），打空一段设下一段
+inline bool isSegmented(const Enemy& enemy, int32_t initHp) {
+  return enemy.isBossStyle && !isPlaceholderHp(initHp) && enemy.maxHp > 0 && initHp > enemy.maxHp;
+}
+
+/// 每帧读到的血量：累计掉血；超过上限就抬高；耗尽（≤ 0）或占位段之后又出现真实血量 = FSM 开始了新一段，
+/// 上限重设为它；判定为分段 BOSS 后按 initHp 显示整场一条（hpView）。返回上限是否变了
+inline bool observeHp(Enemy& enemy, int32_t hp, int32_t initHp) {
   const int32_t last = enemy.lastHp;
   enemy.lastHp = hp;
+  const bool isRealChange = last != NO_HP && !isPlaceholderHp(last) && !isPlaceholderHp(hp);
+  if (isRealChange && hp < last) enemy.damageTaken += last - hp;
+  const PhasePlan& plan = enemy.phases;
+  const bool hasNextPhase = enemy.phaseIndex + 1 < plan.count;
+  // 下一段加上来：回升至少半段（同一帧里可能先挨了一刀再加血，净回升略少于段值）
+  if (isRealChange && hasNextPhase && (hp - last) * 2 >= plan.hp[enemy.phaseIndex + 1]) ++enemy.phaseIndex;
+  if (enemy.totalHp == 0 && isSegmented(enemy, initHp)) enemy.totalHp = initHp;
   if (isPlaceholderHp(hp) || hp <= 0) return false;
   const bool isNewPhase = last != NO_HP && (last <= 0 || isPlaceholderHp(last));
   if (!isNewPhase && hp <= enemy.maxHp) return false;
@@ -97,6 +116,21 @@ inline bool observeHp(Enemy& enemy, int32_t hp) {
 
 /// 这一帧能画：真实血量且已知上限
 inline bool isDrawable(const Enemy& enemy, int32_t hp) { return !isPlaceholderHp(hp) && enemy.maxHp > 0; }
+
+/// 条上显示的血量与上限（整场一条）：有段表时 = 当前血量 + 后面各段 / 各段合计；分段但没段表时 = initHp − 累计掉血；
+/// 其余是实时血量 / 当前上限
+struct HpView {
+  int32_t hp;
+  int32_t maxHp;
+};
+
+inline HpView hpView(const Enemy& enemy, int32_t hp) {
+  if (enemy.phases.count > 0) {
+    return {std::max(0, hp) + phaseSum(enemy.phases, enemy.phaseIndex + 1), phaseSum(enemy.phases, 0)};
+  }
+  if (enemy.totalHp > 0) return {std::max(0, enemy.totalHp - enemy.damageTaken), enemy.totalHp};
+  return {hp, enemy.maxHp};
+}
 
 inline float healthRatio(int32_t hp, int32_t maxHp) {
   if (maxHp <= 0) return 0.0f;
@@ -164,6 +198,7 @@ class HudModel {
   /// （苍白之母 1204，实际每阶段一两百），所以 BOSS 的上限只认实际见过的血量。占位血量不计入上限。
   void onHit(const void* manager, int32_t initHp, int32_t hp, float now) {
     Enemy& slot = slotFor(manager);
+    if (!slot.active) slot.lastHp = hp;  // 新登记：hp 是这一刀之前的血量，这一刀的掉血也要算进 damageTaken
     slot.manager = manager;
     slot.isBossStyle = slot.isBossStyle || isBoss(pickMaxHp(initHp, hp));
     const int32_t candidate = slot.isBossStyle ? hp : pickMaxHp(initHp, hp);

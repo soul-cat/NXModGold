@@ -10,17 +10,18 @@ namespace sshud::hud {
 
 constexpr bool LOG_BOSS_HP = true;
 
-/// observeHp 之后调用：previousHp / wasHidden 是这一帧之前的状态
-inline void logBossHp(const Enemy& enemy, int32_t previousHp, bool wasHidden) {
+/// observeHp 之后调用：previousHp / wasHidden / wasSegmented 是这一帧之前的状态
+inline void logBossHp(const Enemy& enemy, int32_t previousHp, bool wasHidden, bool wasSegmented) {
   if (!LOG_BOSS_HP || !enemy.isBossStyle) return;
-  if (previousHp == enemy.lastHp && wasHidden == enemy.isHidden) return;
-  if (previousHp == NO_HP) {
+  if (previousHp == enemy.lastHp && wasHidden == enemy.isHidden && wasSegmented == (enemy.totalHp > 0)) return;
+  if (previousHp == NO_HP || wasSegmented != (enemy.totalHp > 0)) {
     char name[options::NAME_CAPACITY];
-    Logging.Log("[sshud] boss %p is %s", enemy.manager,
-                options::nameOf(const_cast<void*>(enemy.manager), name, sizeof(name)));
+    Logging.Log("[sshud] boss %p is %s, total %d", enemy.manager,
+                options::nameOf(const_cast<void*>(enemy.manager), name, sizeof(name)), enemy.totalHp);
   }
-  Logging.Log("[sshud] boss %p hp %d -> %d max %d%s", enemy.manager, previousHp == NO_HP ? -1 : previousHp,
-              enemy.lastHp, enemy.maxHp, enemy.isHidden ? " hidden" : "");
+  const HpView view = hpView(enemy, enemy.lastHp);
+  Logging.Log("[sshud] boss %p hp %d -> %d phase %d shown %d/%d%s", enemy.manager, previousHp == NO_HP ? -1 : previousHp,
+              enemy.lastHp, enemy.phaseIndex + 1, view.hp, view.maxHp, enemy.isHidden ? " hidden" : "");
 }
 
 }  // namespace sshud::hud
