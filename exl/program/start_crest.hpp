@@ -82,13 +82,40 @@ inline void* act3Crest(void* crest) {
   return replacement;
 }
 
-/// 选项行显示名：取 ToolCrest.displayName（跟随游戏语言），纹章或文字取不到时用 ID
+inline ui::ManagedString fallbackNameOf(size_t index) {
+  const bool isChinese = options::isSimplifiedChinese(options::currentLanguage());
+  return call<ui::ManagedString>(MARSHAL_PTRTOSTRUNI, isChinese ? CREST_FALLBACK_ZH[index] : CREST_FALLBACK_EN[index]);
+}
+
+inline bool isUsable(ui::ManagedString text) {
+  if (text == nullptr) return false;
+  const int32_t length = ui::readField<int32_t>(text, options::STRING_LENGTH);
+  const auto* chars = reinterpret_cast<const char16_t*>(static_cast<const uint8_t*>(text) + options::STRING_CHARS);
+  return length > 0 && isUsableName(chars, static_cast<size_t>(length));
+}
+
+/// 取显示名的来源写进日志（每个纹章一行；只在建选项行时调用）
+inline void logNameSource(size_t index, const uint8_t* localised, ui::ManagedString text) {
+  char sheet[options::NAME_CAPACITY];
+  char key[options::NAME_CAPACITY];
+  const int32_t length = text != nullptr ? ui::readField<int32_t>(text, options::STRING_LENGTH) : -1;
+  Logging.Log("[sshud] crest: %s name %s/%s len=%d%s", CREST_IDS[index],
+              options::asciiOf(ui::readField<ui::ManagedString>(localised, 0), sheet, sizeof(sheet)),
+              options::asciiOf(ui::readField<ui::ManagedString>(localised, sizeof(void*)), key, sizeof(key)), length,
+              isUsable(text) ? "" : " -> fallback");
+}
+
+/// 选项行显示名：取 ToolCrest.displayName（跟随游戏语言）；纹章不存在或文字不可用时用后备名
 inline ui::ManagedString displayNameOf(size_t index) {
   void* crest = call<void*>(TIM_GETCRESTBYNAME, managedString(CREST_IDS[index]));
-  ui::ManagedString text = ui::isAlive(crest)
-                               ? ui::localisedToString(static_cast<const uint8_t*>(crest) + TOOLCREST_DISPLAYNAME)
-                               : nullptr;
-  return text != nullptr ? text : managedString(CREST_IDS[index]);
+  if (!ui::isAlive(crest)) {
+    Logging.Log("[sshud] crest: %s not found -> fallback", CREST_IDS[index]);
+    return fallbackNameOf(index);
+  }
+  const auto* localised = static_cast<const uint8_t*>(crest) + TOOLCREST_DISPLAYNAME;
+  ui::ManagedString text = ui::localisedToString(localised);
+  logNameSource(index, localised, text);
+  return isUsable(text) ? text : fallbackNameOf(index);
 }
 
 /// 选项列表 string[CREST_COUNT]：显示名用换行拼起来再 Split（借托管代码分配数组）

@@ -1,5 +1,6 @@
 // options_menu_model.hpp 的宿主机测试
 #include "../exl/program/options_menu_model.hpp"
+#include "../exl/program/start_crest_model.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -59,6 +60,16 @@ static void testFitLayout() {
   CHECK(fitLayout(12, 0.0f, 50.0f, 105.0f).scale == 1.0f);
 }
 
+static void testCrestNames() {
+  using namespace sshud::crest;
+  CHECK(isUsableName(u"萨满", 2));
+  CHECK(!isUsableName(u"", 0));
+  CHECK(!isUsableName(u"!!Tools/CREST_CURSED!!", 22));
+  CHECK(!isUsableName(u"#CREST", 6));
+  CHECK(std::strcmp(crestIdOf(6), "Spell") == 0);
+  CHECK(std::strcmp(crestIdOf(99), "Hunter") == 0);
+}
+
 static void testAscii() {
   char out[8];
   asciiFromUtf16(u"MOH_ON", 6, out, sizeof(out));
@@ -76,6 +87,7 @@ int main() {
   testLabels();
   testRowKeys();
   testFitLayout();
+  testCrestNames();
   testAscii();
   if (g_failures == 0) std::printf("test_options_menu_model: all passed\n");
   return g_failures == 0 ? 0 : 1;
