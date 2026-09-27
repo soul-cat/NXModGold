@@ -27,9 +27,8 @@ class ImguiStateGuard {
         alignment_(ui::styleAlignment(style_)),
         font_(defaultFont()) {
     ui::setStyleAlignment(style_, ui::TEXT_ANCHOR_MIDDLE_CENTER);
-    ui::ManagedObject gameFont = findGameFont();
-    logGameFont(gameFont);
-    if (gameFont != nullptr) setDefaultFont(gameFont);
+    ui::ManagedObject font = hudFont();
+    if (font != nullptr) setDefaultFont(font);
   }
   ~ImguiStateGuard() {
     setDefaultFont(font_);

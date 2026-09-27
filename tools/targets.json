@@ -1419,6 +1419,17 @@
       "kind": "method",
       "script_name": "SwitchFileSystemHelper$$WriteAllBytes",
       "_note": "static void (string path, byte[] bytes, MI)：恢复点、版本备份落盘"
+    },
+    {
+      "name": "OBJECT_GETTYPE",
+      "kind": "method",
+      "script_name": "System.Object$$GetType"
+    },
+    {
+      "name": "RESOURCES_FINDOBJECTSOFTYPEALL",
+      "kind": "method",
+      "script_name": "UnityEngine.Resources$$FindObjectsOfTypeAll",
+      "_note": "Object[] (Type type, MI)；非泛型版本"
     }
   ]
 }
