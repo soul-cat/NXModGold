@@ -9,6 +9,7 @@
 
 #include "boss_rush_table.hpp"
 #include "map_calls.hpp"
+#include "map_collected.hpp"
 #include "options_menu_calls.hpp"
 
 #include <cstring>
@@ -55,6 +56,28 @@ inline void applyFlags(const BossEntry& boss) {
     call<void>(PD_SETBOOL, playerData, managedString(boss.flags[i].name), boss.flags[i].value);
     Logging.Log("[sshud] boss rush: %s=%d", boss.flags[i].name, boss.flags[i].value ? 1 : 0);
   }
+}
+
+/// 场景持久标记：TryGetValue 拿到的是集合里那份数据对象（引用类型），直接改它的值。
+/// 查不到（从没存过）就是默认的 false，不用管。
+inline void applySceneBools(const BossEntry& boss) {
+  for (size_t i = 0; i < boss.sceneBoolCount; ++i) {
+    const map::EntryStrings strings{managedString(boss.scene), managedString(boss.sceneBools[i].id)};
+    const uint8_t* record = map::findBoolRecord(strings);
+    if (record != nullptr) ui::writeField<bool>(const_cast<uint8_t*>(record), map::PERSISTENT_BOOL_VALUE, boss.sceneBools[i].value);
+    Logging.Log("[sshud] boss rush: scene bool %s/%s=%d%s", boss.scene, boss.sceneBools[i].id,
+                boss.sceneBools[i].value ? 1 : 0, record != nullptr ? "" : " (no record)");
+  }
+}
+
+/// 时间流速全部复位成 1（TimeManager.Reset，游戏自己的「退出到主菜单」就这么做）：
+/// BOSS 战里挨打的定格 / 慢动作若在切场景时没走完，时间可能停在 0
+inline void resetTime() { call<void>(TIMEMANAGER_RESET); }
+
+/// 菜单打开和传送途中无敌（菜单打开时角色被锁住，挨打会触发定格）
+inline void setInvincible(bool isInvincible) {
+  void* playerData = call<void*>(PD_GETINSTANCE);
+  if (playerData != nullptr) call<void>(PD_SETBOOL, playerData, managedString("isInvincible"), isInvincible);
 }
 
 inline const void* sceneLoadInfoClass() {

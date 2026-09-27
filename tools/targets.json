@@ -1430,6 +1430,17 @@
       "kind": "method",
       "script_name": "UnityEngine.Resources$$FindObjectsOfTypeAll",
       "_note": "Object[] (Type type, MI)；非泛型版本"
+    },
+    {
+      "name": "TIMEMANAGER_RESET",
+      "kind": "method",
+      "script_name": "TimeManager$$Reset",
+      "_note": "时间流速全部复位成 1（游戏 QuitToMenu 调用）"
+    },
+    {
+      "name": "TIMEMANAGER_GETTIMESCALE",
+      "kind": "method",
+      "script_name": "TimeManager$$get_TimeScale"
     }
   ]
 }

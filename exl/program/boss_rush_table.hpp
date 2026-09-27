@@ -6,6 +6,8 @@
 //   - encountered* 保持 true：跳过初见演出，进门直接开打；
 //   - blackThreadWorld：100% 存档已在第三幕（true），第一、二幕的 BOSS 在「普通世界」布景里 → 改成 false，
 //     第三幕的 BOSS 改成 true。
+// 场景持久标记（SceneData.persistentBools，按 场景 + 物体名 记）也要改：例如 Tut_03 的「Battle Scene」为 true
+// 表示这场战斗已打完，战斗场景不会再开打（苔藓之母实测）。
 // 只改内存，4 号位不存档（boss_rush_save_guard.hpp），重新读档即恢复。
 // 名字取猎人日志的本地化键（Journal 表），取不到才用 fallback。
 
@@ -17,10 +19,16 @@
 namespace sshud::bossrush {
 
 constexpr size_t MAX_BOSS_FLAGS = 4;
+constexpr size_t MAX_SCENE_BOOLS = 4;
 constexpr int ACT_COUNT = 3;
 
 struct BossFlag {
   const char* name;  // PlayerData 的 bool 字段名
+  bool value;
+};
+
+struct SceneBool {
+  const char* id;  // BOSS 场景里带 PersistentBoolItem 的物体名
   bool value;
 };
 
@@ -33,6 +41,8 @@ struct BossEntry {
   const char* gate;
   BossFlag flags[MAX_BOSS_FLAGS];
   size_t flagCount;
+  SceneBool sceneBools[MAX_SCENE_BOOLS];
+  size_t sceneBoolCount;
   const char* activatePath;   // 到场后激活的物体（根/子/…；可停用的子物体也行），nullptr = 不需要
 };
 
@@ -40,12 +50,11 @@ constexpr const char* JOURNAL_SHEET = "Journal";
 
 constexpr BossEntry BOSSES[] = {
     {"NAME_MOSSBONE_MOTHER", u"苔藓之母", u"Moss Mother", 1, "Tut_03", "right1",
-     {{"defeatedMossMother", false}, {"blackThreadWorld", false}}, 2,
-     "Black Thread States/Normal World/Battle Scene/Wave 1"},
+     {{"defeatedMossMother", false}, {"blackThreadWorld", false}}, 2, {{"Battle Scene", false}}, 1, nullptr},
     {"NAME_SPLINTER_QUEEN", u"碎裂者修女", u"Sister Splinter", 1, "Shellwood_18", "right1",
-     {{"defeatedSplinterQueen", false}, {"blackThreadWorld", false}}, 2, nullptr},
+     {{"defeatedSplinterQueen", false}, {"blackThreadWorld", false}}, 2, {}, 0, nullptr},
     {"NAME_SKULL_KING", u"骷髅暴君", u"Skull Tyrant", 1, "Bone_15", "left1",
-     {{"skullKingDefeated", false}, {"blackThreadWorld", false}}, 2, nullptr},
+     {{"skullKingDefeated", false}, {"blackThreadWorld", false}}, 2, {}, 0, nullptr},
 };
 constexpr size_t BOSS_COUNT = sizeof(BOSSES) / sizeof(BOSSES[0]);
 
