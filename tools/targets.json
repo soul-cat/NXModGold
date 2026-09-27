@@ -1404,21 +1404,21 @@
       "script_name": "GameManager.SceneLoadInfo$$.ctor"
     },
     {
-      "name": "SWITCHPLATFORM_WRITESAVESLOT",
-      "kind": "method",
-      "script_name": "SwitchPlatform$$WriteSaveSlot",
-      "_note": "void (this, int slotIndex, byte[] bytes, Action<bool> callback, MI)；文件名 user{slotIndex}.dat"
-    },
-    {
-      "name": "SSRH_WRITESAVERESTOREPOINT",
-      "kind": "method",
-      "script_name": "SwitchSaveRestoreHandler$$WriteSaveRestorePoint",
-      "_note": "void (this, int slot, string identifier, bool noDelete, byte[] bytes, Action<bool> callback, MI)"
-    },
-    {
       "name": "ACTION_BOOL_INVOKE",
       "kind": "method",
       "script_name": "System.Action<bool>$$Invoke"
+    },
+    {
+      "name": "SSH_WRITEFILE",
+      "kind": "method",
+      "script_name": "SwitchSaveHandler$$WriteFile",
+      "_note": "void (this, string path, byte[] bytes, Action<bool> callback, MI)：存档 / 全局数据落盘"
+    },
+    {
+      "name": "SFSH_WRITEALLBYTES",
+      "kind": "method",
+      "script_name": "SwitchFileSystemHelper$$WriteAllBytes",
+      "_note": "static void (string path, byte[] bytes, MI)：恢复点、版本备份落盘"
     }
   ]
 }

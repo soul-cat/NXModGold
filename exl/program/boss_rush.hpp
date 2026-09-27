@@ -85,9 +85,10 @@ inline bool update(float now) {
 }
 
 inline void installHooks() {
-  WriteSaveSlotHook::InstallAtOffset(SWITCHPLATFORM_WRITESAVESLOT);
-  WriteRestorePointHook::InstallAtOffset(SSRH_WRITESAVERESTOREPOINT);
-  Logging.Log("[sshud] boss rush hooks installed: WriteSaveSlot, WriteSaveRestorePoint (slot %d never saves)", BOSS_SLOT);
+  SaveHandlerWriteFileHook::InstallAtOffset(SSH_WRITEFILE);
+  FileSystemWriteAllBytesHook::InstallAtOffset(SFSH_WRITEALLBYTES);
+  Logging.Log("[sshud] boss rush hooks installed: SwitchSaveHandler.WriteFile, SwitchFileSystemHelper.WriteAllBytes (slot %d never saves)",
+              BOSS_SLOT);
 }
 
 }  // namespace sshud::bossrush

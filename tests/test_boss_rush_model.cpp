@@ -96,12 +96,25 @@ static void testTable() {
   CHECK(bossIndexInAct(1, bossCountInAct(1)) == -1);
 }
 
+static void testBossSlotPath() {
+  CHECK(isBossSlotPath("save:/user4.dat"));
+  CHECK(isBossSlotPath("save:/user4_1.0.30000.dat"));
+  CHECK(isBossSlotPath("save:/Restore_Points4/restoreData19.dat"));
+  CHECK(isBossSlotPath("user4.dat"));
+  CHECK(!isBossSlotPath("save:/user1.dat"));
+  CHECK(!isBossSlotPath("save:/user1_1.0.30000.dat"));
+  CHECK(!isBossSlotPath("save:/Restore_Points1/NODELrestoreData1.dat"));
+  CHECK(!isBossSlotPath("save:/shared.dat"));
+  CHECK(!isBossSlotPath("save:/user40.dat"));
+}
+
 int main() {
   testOpenCombo();
   testNavigateAndConfirm();
   testFixedItemsAndClose();
   testPagesWrapAndClamp();
   testTable();
+  testBossSlotPath();
   if (g_failures == 0) std::printf("test_boss_rush_model: all passed\n");
   return g_failures == 0 ? 0 : 1;
 }

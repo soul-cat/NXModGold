@@ -9,6 +9,7 @@
 #include "boss_rush_table.hpp"
 
 #include <cstdint>
+#include <cstring>
 
 namespace sshud::bossrush {
 
@@ -21,6 +22,18 @@ constexpr uint64_t BUTTON_LEFT = 1ull << 12;
 constexpr uint64_t BUTTON_UP = 1ull << 13;
 constexpr uint64_t BUTTON_RIGHT = 1ull << 14;
 constexpr uint64_t BUTTON_DOWN = 1ull << 15;
+
+constexpr const char* BOSS_SLOT_SAVE_PREFIX = "user4";              // user4.dat、版本备份 user4_<版本>.dat
+constexpr const char* BOSS_SLOT_RESTORE_DIR = "Restore_Points4/";  // 自动恢复点
+
+/// 存档目录里这个路径是不是 4 号位的文件（只看文件名 / 恢复点目录，不管挂载名前缀）
+inline bool isBossSlotPath(const char* path) {
+  if (std::strstr(path, BOSS_SLOT_RESTORE_DIR) != nullptr) return true;
+  const char* slash = std::strrchr(path, '/');
+  const char* name = slash != nullptr ? slash + 1 : path;
+  const size_t prefix = std::strlen(BOSS_SLOT_SAVE_PREFIX);
+  return std::strncmp(name, BOSS_SLOT_SAVE_PREFIX, prefix) == 0 && (name[prefix] == '.' || name[prefix] == '_');
+}
 
 constexpr int FIXED_ITEM_COUNT = 2;  // 回休息点、回满状态
 constexpr int ITEM_REST = 0;
