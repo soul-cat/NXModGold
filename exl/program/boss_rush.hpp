@@ -15,6 +15,8 @@
 #include "sd_logger.hpp"
 #include "toggles.hpp"
 
+#include <cstring>
+
 namespace sshud::bossrush {
 
 constexpr float ARRIVAL_SETTLE_SECONDS = 1.0f;  // 到场后等场景里的物体初始化完
@@ -118,10 +120,47 @@ inline bool update(float now) {
   return g_menu.isOpen();
 }
 
+constexpr uintptr_t PERSISTENT_DATA_ID = 0x10;          // PersistentItemData<bool>.ID
+constexpr uintptr_t PERSISTENT_DATA_SCENE = 0x18;       // .SceneName
+constexpr uintptr_t PERSISTENT_DATA_VALUE = 0x21;       // .Value
+
+/// 传送途中游戏要把 (scene, id) 写回场景数据时，如果是这个 BOSS 要重置的标记，改成表里的值。
+/// 从 BOSS 场景直接重进同一场景时，离开旧场景那一刻游戏会把「战斗已打完」写回去，盖掉进场前的重置。
+inline void overridePersistentWrite(void* data) {
+  const BossEntry* boss = g_travel.boss;
+  if (boss == nullptr || boss->sceneBoolCount == 0 || data == nullptr) return;
+  char scene[options::NAME_CAPACITY];
+  char id[options::NAME_CAPACITY];
+  if (std::strcmp(options::asciiOf(ui::readField<ui::ManagedString>(data, PERSISTENT_DATA_SCENE), scene, sizeof(scene)),
+                  boss->scene) != 0) {
+    return;
+  }
+  options::asciiOf(ui::readField<ui::ManagedString>(data, PERSISTENT_DATA_ID), id, sizeof(id));
+  for (size_t i = 0; i < boss->sceneBoolCount; ++i) {
+    if (std::strcmp(id, boss->sceneBools[i].id) != 0) continue;
+    ui::writeField<bool>(data, PERSISTENT_DATA_VALUE, boss->sceneBools[i].value);
+    Logging.Log("[sshud] boss rush: kept scene bool %s/%s=%d while leaving", scene, id, boss->sceneBools[i].value ? 1 : 0);
+  }
+}
+
+}  // namespace sshud::bossrush
+
+// IL2CPP 签名：void (PersistentItemDataCollection<bool, …>* self, PersistentItemData<bool>* data, const MethodInfo*)
+HOOK_DEFINE_TRAMPOLINE(PersistentBoolSetValueHook) {
+  static void Callback(void* self, void* data, const void* method) {
+    sshud::bossrush::overridePersistentWrite(data);
+    Orig(self, data, method);
+  }
+};
+
+namespace sshud::bossrush {
+
 inline void installHooks() {
+  PersistentBoolSetValueHook::InstallAtOffset(PDC_BOOL_SETVALUE);
   SaveHandlerWriteFileHook::InstallAtOffset(SSH_WRITEFILE);
   FileSystemWriteAllBytesHook::InstallAtOffset(SFSH_WRITEALLBYTES);
-  Logging.Log("[sshud] boss rush hooks installed: SwitchSaveHandler.WriteFile, SwitchFileSystemHelper.WriteAllBytes (slot %d never saves)",
+  Logging.Log("[sshud] boss rush hooks installed: PersistentItemDataCollection<bool>.SetValue, SwitchSaveHandler.WriteFile, "
+              "SwitchFileSystemHelper.WriteAllBytes (slot %d never saves)",
               BOSS_SLOT);
 }
 

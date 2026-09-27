@@ -1441,6 +1441,12 @@
       "name": "TIMEMANAGER_GETTIMESCALE",
       "kind": "method",
       "script_name": "TimeManager$$get_TimeScale"
+    },
+    {
+      "name": "PDC_BOOL_SETVALUE",
+      "kind": "method",
+      "script_name": "SceneData.PersistentItemDataCollection<bool, object>$$SetValue",
+      "_note": "共享泛型：void (coll, PersistentItemData<bool> data, MI)；data: ID 0x10, SceneName 0x18, Value 0x21（反汇编核实）；PersistentBoolItem.SaveValue 调它"
     }
   ]
 }
