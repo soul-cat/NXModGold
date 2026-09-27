@@ -18,13 +18,14 @@
 |---|---|---|
 | 敌人血条 | 受玩家伤害的敌人头顶显示血条与 `hp/maxHp`，最后一次掉血 1.5 秒后隐藏 | `Silksong_HealthBar` |
 | 伤害数字 | 受击处飘出红色 `-伤害`，2 秒内上升并淡出 | 同上 |
-| BOSS 血条 | 最大血量 > 105 的敌人改画屏幕底部居中的 BOSS 条（带猎人日志名字），多个 BOSS 向上堆叠；BOSS 大标题出现（`DisplayBossTitle`）时就登记，不等第一刀；不按时间隐藏，死亡 / 离开场景才消失（血量归零或暂时停用只是先不画）。FSM 用 SetHP 设的占位大数（> 3000）不计入上限；按段加血的 BOSS（苍白之母：FSM `Phase Control` 的 `P1 HP`…`P6 HP`，打空一段 `AddHP` 下一段）读出段表，显示整场一条：当前血量 + 后面各段。BOSS 名 / 数字用游戏自己的 Unity 字体（`FontManager` 管理，按语言回退系统字库），简体字不缺字形。外框与填充是作者自绘贴图 `exl/assets/boss_frame.png` / `boss_fill.png` | 同上 |
+| BOSS 血条 | 最大血量 > 105 的敌人改画屏幕底部居中的 BOSS 条（带猎人日志名字），多个 BOSS 向上堆叠；BOSS 大标题出现（`DisplayBossTitle`）时就登记，不等第一刀；不按时间隐藏，死亡 / 离开场景才消失（血量归零或暂时停用只是先不画）。FSM 用 SetHP 设的占位大数（> 3000）不计入上限；按段加血的 BOSS（苍白之母：FSM `Phase Control` 的 `P1 HP`…`P6 HP`，打空一段 `AddHP` 下一段）读出段表，显示整场一条：当前血量 + 后面各段。HUD 文字（BOSS 名 / 数字 / 菜单）用游戏自带的中文字体 `NotoSerifCJKsc-Regular`（`Resources.FindObjectsOfTypeAll(Font)` 按名找到，画时设成 IMGUI 默认字体），简体字不缺字形。外框与填充是作者自绘贴图 `exl/assets/boss_frame.png` / `boss_fill.png` | 同上 |
 | 地图收集物标注 | 571 个收集物（18 类）在快速地图与大地图上用游戏自带图标标出；区域地图没买、房间没绘制、已收集的都不显示；已向跳蚤商队猎人买了原生跳蚤图钉的区域，跳蚤交给游戏自己标，不重复画 | `Completionist Map` |
 | 游戏内开关面板 | 按住 R3 弹出中文面板，按住期间方向键切换功能，设置存 SD 卡 | — |
 | 原生选项页开关 | 「选项 → 游戏」页末尾多出七行，外观、字体、手柄导航与原生选项一致，与 R3 面板共用设置；行多时自动压行距并等比缩小整页，保证都在屏幕内 | — |
 | R3 快捷面板开关 | 选项页第五行，默认开：关掉后按住 R3 不再弹面板、方向键不再切换 | — |
 | 送货不损坏 | 选项页第六行，默认关：信使送货的物品挨打、撞墙、硬着陆、计时、掉进危险地形都不掉耐久也不碎，交货照常走游戏流程 | — |
 | 新存档起始纹章 | 选项页第七行，默认猎人（原版）：9 个纹章任选，只影响之后新开的存档；进第三幕时游戏强制装猎人纹章，没有猎人的存档改为保持当前纹章 | `StartCrestSelector` |
+| BOSS 挑战（4 号位） | 读 4 号位存档时按住 R3 再按 ZR 打开 BOSS 列表（45 场，按幕分页），选一个直接传送到 BOSS 房并重置它的标记；4 号位的存档文件永不写盘，重新读档即恢复原样。建议在 4 号位放一个 100% 存档 | Godhome / Pantheon of Pharloom |
 | SD 日志 | `SD:/config/sshud/log.txt`，每次启动覆盖 | — |
 | 存档导出 / 导入 | 触发文件驱动，把整个存档导出到 SD，或从 SD 导入 `user1..4.dat` | — |
 
@@ -71,7 +72,9 @@ Atmosphère 的金手指 VM 只能读写内存，没有绘图能力；血条和�
 | `exl/program/hud_hooks.hpp` | TakeDamage / LateUpdate / OnGUI 三个 hook |
 | `exl/program/hud_model.hpp` / `hud_phase_model.hpp` | 血条纯逻辑：敌人槽位（16）、飘字池（32）、布局、占位血量与分段 BOSS 段表；宿主机可测 |
 | `exl/program/hud_boss_phases.hpp` | 从 BOSS 的 FSM `Phase Control` 读各段血量 |
-| `exl/program/hud_font.hpp` | HUD 文字换用游戏字体（`GUIStyle.SetDefaultFont`，画完还原） |
+| `exl/program/hud_font.hpp` | HUD 文字换用游戏的中文字体（`GUIStyle.SetDefaultFont`，画完还原） |
+| `exl/program/boss_rush*.hpp` | BOSS 挑战：BOSS 表（`boss_rush_table.hpp`）、菜单纯逻辑与标记账本（`_model`）、游戏调用（`_calls`）、4 号位存档拦截（`_save_guard`）、菜单文字与绘制 |
+| `exl/program/fsm_lookup.hpp` | 按 GameObject + 名字找 PlayMaker 状态机 |
 | `exl/program/hud_draw.hpp` | IMGUI 绘制：敌人血条、BOSS 条、飘字、开关面板 |
 | `exl/program/boss_detect.hpp` | `DisplayBossTitle` hook + 激活敌人列表扫描 |
 | `exl/program/bar_textures.hpp` | 运行时建 `Texture2D`，三宫格拉伸画 BOSS 条 |
@@ -150,6 +153,7 @@ make -C tests test     # ASan + UBSan
 | `test_toggles` | R3 面板输入（按住、方向映射、按下沿、同时按、松开）、`config.ini` 格式化与解析 |
 | `test_options_menu_model` | 原生选项页：从本地化键认出「开」是第几项、按游戏语言选标签、行键名、行距 / 缩放换算、纹章后备名判定、UTF-16 → ASCII 日志转换 |
 | `test_map_timing` | 地图刷新耗时的批量汇总 |
+| `test_boss_rush_model` | BOSS 挑战菜单：组合键开关、翻页、滚动窗口、固定项、BOSS 表完整性、4 号位存档路径判定、标记账本 |
 
 工具自检：`./tools/nsotool.py selftest`、`./tools/40-patch-npdm.py selftest`、
 `./tools/50-gen-collectibles.py selftest`、`./tools/60-gen-bar-textures.py selftest`。
@@ -187,6 +191,21 @@ Ryujinx：右键游戏 →「打开 Atmosphere Mods 目录」，放到 `<该目�
 默认全开。有改动时松开 R3 写回 `SD:/config/sshud/config.ini`（每行 `key=0/1`，可手改）。
 地图标记开关在下次打开地图时生效。只读手柄状态，不拦截游戏输入。
 游戏自己的地图 pin 显示设为「无」时，收集物标记也一起隐藏。
+
+### BOSS 挑战
+
+只在 **4 号位**存档里可用（建议放一个 100% 完成度的存档，所有 BOSS 都打过、已到第三幕）。按住 R3 再按 ZR 打开菜单：
+上下选、左右换幕、A 进入、B 关闭。每页开头两项固定：回休息点（钟心镇长椅）、回满血和丝。
+
+- 选 BOSS 后：先把上一个 BOSS 改过的标记还原成存档原值，再改这个 BOSS 需要的 PlayerData 标记与场景持久标记，
+  复位时间流速，传送到 BOSS 房的门；到场后按表执行修正（激活 / 停用物体、给状态机发事件或跳状态）。
+- 4 号位的所有存档文件（`user4.dat`、版本备份、`Restore_Points4/`）在最底层写盘处被拦下，游戏照常以为已存档；
+  其他存档位不受影响。想恢复原状就回标题重新读档。
+- 苍白之母、失心蕾丝的结局演出在到场时被停用，打完不会播结局。
+- 部分 BOSS 需要互动才开打（加蒙德与扎扎：对话接受切磋；初罪者：神龛互动后按捆绑）；钟道兽、解体者打完会进丝之心回忆，
+  黑寡妇、初罪者、回忆 BOSS、三叶草舞者打完会自动切场景——都只影响内存。
+- BOSS 表来自场景资源包：`tools/80-scan-boss-scenes.py`（列出场景检查的标记、入口门、持久标记及其在存档里的值）、
+  `tools/81-dump-fsm.py`（解出 PlayMaker 状态机）。资源包用 `tools/ncaext … --match <路径>` 解到 `work/bundles/`。
 
 ### 存档导出
 

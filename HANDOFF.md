@@ -31,6 +31,8 @@
 | 存档导入 / 导出 | 导入 `user1..4.dat`（含备份与 `.done` 改名）；导出整个 `save:/` |
 | 开图卡顿修复 | 原来每次开图约 330 ms 卡顿；场景查询改为跨刷新缓存（`c7dded7`），托管字符串钉住复用、日志只在变化时写（`1b24c4d`） |
 
+| BOSS 挑战（4 号位） | 苔藓之母、碎裂者修女、骷髅暴君、加蒙德与扎扎、机枢舞者实机开打；战斗中途切换不卡死（传送前后 `TimeManager.Reset`）；4 号位存档写入全部拦下，`user4.dat` 多轮测试前后哈希不变 |
+
 ### 待实机确认
 
 - **BOSS 条贴图外观**（`1760685`）：外框 / 填充贴图的比例、内缩量（`BOSS_FILL_INSET_X_RATIO` / `_Y_RATIO`）和尖角效果还没在实机上看过。
@@ -180,6 +182,21 @@ macOS 自带 bash 3.2 会把全角括号当变量名字符（写 `${var}（`）�
 - **不要联网**（封号）。
 
 ---
+
+## BOSS 挑战的资料与坑
+
+- **场景数据**：`tools/ncaext <prod.keys> <title.keys> <base.nca> <upd.nca> work/bundles --match scenes_scenes_scenes/<名>`
+  解出单个资源包（`--list` 列全部）；注意叠加方向是「基础版.OpenFileSystemWithPatch(更新档)」，反了会拿到 1.0.0 的资源。
+  `tools/80-scan-boss-scenes.py <场景前缀> --save <100% 存档 JSON>`、`tools/81-dump-fsm.py <场景> <物体名>`。
+- **BOSS 不刷新的三种原因**：PlayerData `defeated*`；场景持久标记（BattleScene 的 PersistentBoolItem 为 true = 战斗已打完）；
+  `blackThreadWorld`（第三幕世界里第一、二幕 BOSS 的布景被换掉）。附加分块（`*_boss`）里的持久标记记在主场景名下。
+- **同场景重进**：离开旧场景时游戏会把「已打完」写回场景数据，盖掉进场前的重置 → hook
+  `PersistentItemDataCollection<bool>.SetValue`，传送途中遇到要重置的标记改回表里的值。
+- **互相冲突的标记**：`FlagLedger` 记下每个被改标记的存档原值，每次传送前先还原上一个 BOSS 的改动。
+- **存档拦截**：只拦 `WriteSaveSlot` 不够（读旧版本存档时的升级写入、版本备份 `userN_<版本>.dat` 走别的路），
+  拦在 `SwitchSaveHandler.WriteFile` 与 `SwitchFileSystemHelper.WriteAllBytes`，按文件路径判定。
+- **字体**：Perpetua 的 `fontNames` 回退在 IMGUI 里不生效（`HasCharacter` 却报有字），必须直接用 `NotoSerifCJKsc-Regular`。
+- 二见兽蝇没收录：它的附加分块由任务「Beastfly Hunt」状态决定（`PlayerData.QuestCompletionData`，偏移 0x938），需要另写任务状态。
 
 ## 其他机器接手需要的材料（都不在版本库里）
 
