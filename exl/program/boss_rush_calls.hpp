@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "boss_rush_model.hpp"
 #include "boss_rush_table.hpp"
 #include "fsm_lookup.hpp"
 #include "map_calls.hpp"
@@ -51,30 +52,71 @@ inline void refillHero() {
   Logging.Log("[sshud] boss rush: refill");
 }
 
-inline void applyFlags(const BossEntry& boss) {
-  void* playerData = call<void*>(PD_GETINSTANCE);
-  if (playerData == nullptr) return;
-  for (size_t i = 0; i < boss.flagCount; ++i) {
-    call<void>(PD_SETBOOL, playerData, managedString(boss.flags[i].name), boss.flags[i].value);
-    Logging.Log("[sshud] boss rush: %s=%d", boss.flags[i].name, boss.flags[i].value ? 1 : 0);
-  }
+inline FlagLedger g_ledger;
+inline const void* g_ledgerPlayerData = nullptr;  // 记账时的 PlayerData；变了（回标题重新读档）就清账
+
+inline void setPlayerDataBool(void* playerData, const char* name, bool value) {
+  call<void>(PD_SETBOOL, playerData, managedString(name), value);
 }
 
 inline const char* sceneOf(const BossEntry& boss, const SceneBool& sceneBool) {
   return sceneBool.scene != nullptr ? sceneBool.scene : boss.scene;
 }
 
-/// 场景持久标记：TryGetValue 拿到的是集合里那份数据对象（引用类型），直接改它的值。
-/// 查不到（从没存过）就是默认的 false，不用管。
-inline void applySceneBools(const BossEntry& boss) {
+/// 场景持久标记的数据对象：TryGetValue 拿到的是集合里那一份（引用类型），改它的值即生效；从没存过返回 null
+inline uint8_t* sceneBoolRecord(const char* scene, const char* id) {
+  const map::EntryStrings strings{managedString(scene), managedString(id)};
+  return const_cast<uint8_t*>(map::findBoolRecord(strings));
+}
+
+inline bool isBossSceneBool(const BossEntry& boss, const char* scene, const char* id) {
+  for (size_t i = 0; i < boss.sceneBoolCount; ++i) {
+    if (std::strcmp(boss.sceneBools[i].id, id) == 0 && std::strcmp(sceneOf(boss, boss.sceneBools[i]), scene) == 0) return true;
+  }
+  return false;
+}
+
+/// 把账上这次用不到的标记还原成存档原值（boss 为 nullptr 时全部还原）
+inline void restoreOthers(void* playerData, const BossEntry* boss) {
+  for (size_t i = 0; i < g_ledger.count(); ++i) {
+    const FlagLedger::Entry& entry = g_ledger.entries()[i];
+    if (entry.scene == nullptr) {
+      if (boss == nullptr || !isBossFlag(*boss, entry.name)) setPlayerDataBool(playerData, entry.name, entry.original);
+      continue;
+    }
+    if (boss != nullptr && isBossSceneBool(*boss, entry.scene, entry.name)) continue;
+    uint8_t* record = sceneBoolRecord(entry.scene, entry.name);
+    if (record != nullptr) ui::writeField<bool>(record, map::PERSISTENT_BOOL_VALUE, entry.original);
+  }
+}
+
+inline void applyBoss(void* playerData, const BossEntry& boss) {
+  for (size_t i = 0; i < boss.flagCount; ++i) {
+    const BossFlag& flag = boss.flags[i];
+    g_ledger.remember(nullptr, flag.name, call<bool>(PD_GETBOOL, playerData, managedString(flag.name)));
+    setPlayerDataBool(playerData, flag.name, flag.value);
+  }
   for (size_t i = 0; i < boss.sceneBoolCount; ++i) {
     const SceneBool& sceneBool = boss.sceneBools[i];
-    const map::EntryStrings strings{managedString(sceneOf(boss, sceneBool)), managedString(sceneBool.id)};
-    const uint8_t* record = map::findBoolRecord(strings);
-    if (record != nullptr) ui::writeField<bool>(const_cast<uint8_t*>(record), map::PERSISTENT_BOOL_VALUE, sceneBool.value);
-    Logging.Log("[sshud] boss rush: scene bool %s/%s=%d%s", sceneOf(boss, sceneBool), sceneBool.id, sceneBool.value ? 1 : 0,
-                record != nullptr ? "" : " (no record)");
+    uint8_t* record = sceneBoolRecord(sceneOf(boss, sceneBool), sceneBool.id);
+    const bool original = record != nullptr && ui::readField<bool>(record, map::PERSISTENT_BOOL_VALUE);
+    g_ledger.remember(sceneOf(boss, sceneBool), sceneBool.id, original);
+    if (record != nullptr) ui::writeField<bool>(record, map::PERSISTENT_BOOL_VALUE, sceneBool.value);
   }
+}
+
+/// 传送前整理世界状态：还原上一个 BOSS 的改动，再应用这一个的（boss 为 nullptr = 回休息点，全部还原）
+inline void prepareWorld(const BossEntry* boss) {
+  void* playerData = call<void*>(PD_GETINSTANCE);
+  if (playerData == nullptr) return;
+  if (playerData != g_ledgerPlayerData) {
+    g_ledger.clear();
+    g_ledgerPlayerData = playerData;
+  }
+  restoreOthers(playerData, boss);
+  if (boss != nullptr) applyBoss(playerData, *boss);
+  Logging.Log("[sshud] boss rush: world prepared for %s (%zu flags tracked)", boss != nullptr ? boss->scene : "rest",
+              g_ledger.count());
 }
 
 /// 时间流速全部复位成 1（TimeManager.Reset，游戏自己的「退出到主菜单」就这么做）：

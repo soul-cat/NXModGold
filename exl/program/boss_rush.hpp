@@ -1,6 +1,7 @@
 // BOSS 挑战（4 号位专用）的运行时：每帧读手柄 → 菜单 → 执行命令；传送后跟踪到场。
 //
-// 流程：按住 R3 按 ZR 打开菜单（锁操作 + 无敌）→ 选 BOSS → 改 PlayerData 标记与场景持久标记（boss_rush_table.hpp）
+// 流程：按住 R3 按 ZR 打开菜单（锁操作 + 无敌）→ 选 BOSS → 还原上一个 BOSS 的改动、改这个 BOSS 的 PlayerData 标记与
+// 场景持久标记（boss_rush_table.hpp；原值记账，见 FlagLedger）
 // → 时间流速复位 → 切到 BOSS 场景的门 → 到场后再复位一次时间、约 1 秒后做表里的到场修正、解除无敌。
 // 传送途中每秒记一行（是否在切场景、时间流速、场景名）并立即写盘：之前在 BOSS 战中途切走会卡死，
 // 日志能区分「卡在加载」（还在记）和「主线程停了」（断了）。4 号位不存档（boss_rush_save_guard.hpp）。
@@ -44,10 +45,7 @@ inline void finishTravel(const char* outcome) {
 }
 
 inline void startTravel(const char* scene, const char* gate, const BossEntry* boss, float now) {
-  if (boss != nullptr) {
-    applyFlags(*boss);
-    applySceneBools(*boss);
-  }
+  prepareWorld(boss);
   resetTime();
   if (!travelTo(scene, gate)) {
     Logging.Log("[sshud] boss rush: travel to %s refused (scene transition in progress)", scene);

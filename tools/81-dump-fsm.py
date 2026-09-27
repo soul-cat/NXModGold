@@ -54,8 +54,8 @@ def decode(data: dict, kind: str, pos: int, size: int):
             return bool(raw[pos])
         if kind == "Float":
             return round(struct.unpack_from("<f", raw, pos)[0], 3)
-        if kind == "FsmEvent":
-            return raw[pos:pos + size].decode("utf8", "replace")
+        if kind == "FsmEvent":  # 事件名短的内联在 byteData，否则（size 0）在 stringParams
+            return raw[pos:pos + size].decode("utf8", "replace") if size > 0 else data["stringParams"][pos]
         if kind == "String":
             return data["stringParams"][pos]
         if kind in TABLES:

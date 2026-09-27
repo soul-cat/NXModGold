@@ -8,6 +8,7 @@
 
 #include "boss_rush_table.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -61,6 +62,57 @@ inline int bossCountInAct(int act) {
   int count = 0;
   for (size_t i = 0; i < BOSS_COUNT; ++i) count += BOSSES[i].act == act ? 1 : 0;
   return count;
+}
+
+constexpr size_t MAX_LEDGER_ENTRIES = 96;
+
+/// 被 BOSS 挑战改过的标记及其在存档里的原值。每次传送前先把上一个 BOSS 改过、这一个用不到的还原，
+/// 世界状态始终是「存档原样 + 这个 BOSS 需要的几处改动」（有的标记互相冲突：蕾丝初见要 visitedCitadel=false，
+/// 荒沼翼主要 true）。key 是 BOSS 表里的常量字符串（地址稳定），比较用内容。
+/// 标记 = PlayerData 字段（scene 为 nullptr）或场景持久标记（scene + id）。
+class FlagLedger {
+ public:
+  struct Entry {
+    const char* scene;
+    const char* name;
+    bool original;
+  };
+
+  bool contains(const char* scene, const char* name) const { return find(scene, name) != nullptr; }
+
+  /// 第一次改某个标记前记下原值；已记过的不覆盖（原值只认存档里的）
+  void remember(const char* scene, const char* name, bool original) {
+    if (contains(scene, name) || count_ >= MAX_LEDGER_ENTRIES) return;
+    entries_[count_++] = {scene, name, original};
+  }
+
+  const Entry* entries() const { return entries_; }
+  size_t count() const { return count_; }
+  void clear() { count_ = 0; }
+
+ private:
+  static bool isSame(const char* a, const char* b) {
+    if (a == nullptr || b == nullptr) return a == b;
+    return std::strcmp(a, b) == 0;
+  }
+
+  const Entry* find(const char* scene, const char* name) const {
+    for (size_t i = 0; i < count_; ++i) {
+      if (isSame(entries_[i].scene, scene) && isSame(entries_[i].name, name)) return &entries_[i];
+    }
+    return nullptr;
+  }
+
+  Entry entries_[MAX_LEDGER_ENTRIES] = {};
+  size_t count_ = 0;
+};
+
+/// 这个 BOSS 自己要设的 PlayerData 标记里有没有 name
+inline bool isBossFlag(const BossEntry& boss, const char* name) {
+  for (size_t i = 0; i < boss.flagCount; ++i) {
+    if (std::strcmp(boss.flags[i].name, name) == 0) return true;
+  }
+  return false;
 }
 
 constexpr int MAX_VISIBLE_ITEMS = 12;  // 一屏最多显示几项，多了随光标滚动

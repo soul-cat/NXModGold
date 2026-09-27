@@ -119,6 +119,22 @@ static void testVisibleWindow() {
   }
 }
 
+static void testFlagLedger() {
+  FlagLedger ledger;
+  ledger.remember(nullptr, "visitedCitadel", true);
+  ledger.remember(nullptr, "visitedCitadel", false);  // 原值只记第一次
+  ledger.remember("Tut_03", "Battle Scene", true);
+  CHECK(ledger.count() == 2);
+  CHECK(ledger.entries()[0].original);
+  CHECK(ledger.contains(nullptr, "visitedCitadel"));
+  CHECK(!ledger.contains("Tut_03", "visitedCitadel"));  // 场景标记与 PlayerData 字段分开
+  CHECK(ledger.contains("Tut_03", "Battle Scene"));
+  ledger.clear();
+  CHECK(ledger.count() == 0);
+  CHECK(isBossFlag(BOSSES[0], BOSSES[0].flags[0].name));
+  CHECK(!isBossFlag(BOSSES[0], "notAFlag"));
+}
+
 int main() {
   testOpenCombo();
   testNavigateAndConfirm();
@@ -127,6 +143,7 @@ int main() {
   testTable();
   testBossSlotPath();
   testVisibleWindow();
+  testFlagLedger();
   if (g_failures == 0) std::printf("test_boss_rush_model: all passed\n");
   return g_failures == 0 ? 0 : 1;
 }

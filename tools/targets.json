@@ -1319,6 +1319,12 @@
       "class": "GameManager",
       "method": "get_hero_ctrl",
       "required": true
+    },
+    {
+      "name": "PD_GETBOOL",
+      "class": "PlayerData",
+      "method": "GetBool",
+      "required": true
     }
   ],
   "script": [
