@@ -285,6 +285,9 @@ static void testPhasePlan() {
     lastShown = shown;
   }
   CHECK(isMonotonic);
+  Enemy midFight = enemy;
+  midFight.phaseIndex = 2;  // 第 3 段打穿到 -6：溢出立刻算进去，之后 AddHP(110) → 104 时显示不变
+  CHECK(hpView(midFight, -6).hp == 686 && hpView(midFight, -6).hp == 104 + 242 + 340);
   CHECK(enemy.phaseIndex == 5);
   CHECK(hpView(enemy, 0).hp == 0);  // 最后一段打空 = 整条空
 }

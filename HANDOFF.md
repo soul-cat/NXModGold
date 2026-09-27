@@ -122,6 +122,8 @@ make -C exl
 - **只在 Repaint 事件里画**：`DrawTexture` / `Label` 在其它 IMGUI 事件里不出像素。绘制入口是 `PlayMakerGUI.OnGUI`，
   `CameraController.LateUpdate` 每帧确保 PlayMakerGUI 存在。
 - **IMGUI 默认字体在 Switch 上没有中文字形**，面板文字只能离线渲染成白色贴图再用 `GUI.color` 染色。
+- **IMGUI 默认字体的中文靠系统字库回退，回退到的是日文字库**，简体独有的字（「丝」）画不出来；HUD 文字改用 `FontManager` 管理的游戏字体（`UnityFontFallback` 按语言设了 `fontNames`）。
+- **苍白之母（`Silk Boss`）的血量是分段加的**：`Phase Control` FSM 开场 `SetHP(P1 HP)`，每段 `CompareHP ≤ 0` 后 `AddHP` 下一段（100/192/240/110/242/340 = 1224，`initHp` 1204 只是预制体值）。资源包在 RomFS `Data/StreamingAssets/aa/Switch/scenes_scenes_scenes/cradle_03.bundle`，UnityPy（`FALLBACK_UNITY_VERSION = 6000.0.50f1`）能解出 FSM。
 - **`DrawTextureWithTexCoords` 被裁掉了**，所以 BOSS 条贴图离线切成左 / 中 / 右三张（三宫格），两端等比，中段拉伸。
 - Unity 原始纹理数据自下而上存行，生成器已提前上下翻转。
 

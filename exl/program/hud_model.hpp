@@ -126,7 +126,8 @@ struct HpView {
 
 inline HpView hpView(const Enemy& enemy, int32_t hp) {
   if (enemy.phases.count > 0) {
-    return {std::max(0, hp) + phaseSum(enemy.phases, enemy.phaseIndex + 1), phaseSum(enemy.phases, 0)};
+    // hp 可能是负的（打穿）：溢出会从下一段扣掉，直接算进去，加段时显示不跳
+    return {std::max(0, hp + phaseSum(enemy.phases, enemy.phaseIndex + 1)), phaseSum(enemy.phases, 0)};
   }
   if (enemy.totalHp > 0) return {std::max(0, enemy.totalHp - enemy.damageTaken), enemy.totalHp};
   return {hp, enemy.maxHp};
