@@ -46,6 +46,7 @@ inline void finishTravel(const char* outcome) {
 
 inline void startTravel(const char* scene, const char* gate, const BossEntry* boss, float now) {
   prepareWorld(boss);
+  clearCutsceneLocks();
   resetTime();
   if (!travelTo(scene, gate)) {
     Logging.Log("[sshud] boss rush: travel to %s refused (scene transition in progress)", scene);
@@ -76,6 +77,7 @@ inline void updateTravel(float now) {
     if (!isInScene(g_travel.scene)) return;
     g_travel.arrivedAt = now;
     resetTime();
+    clearCutsceneLocks();
   }
   if (now < g_travel.arrivedAt + ARRIVAL_SETTLE_SECONDS) return;
   const size_t fixupCount = g_travel.boss != nullptr ? g_travel.boss->fixupCount : 0;

@@ -80,9 +80,13 @@ static void testPagesWrapAndClamp() {
   CHECK(menu.act() == ACT_COUNT);
   tap(menu, BUTTON_RIGHT);
   CHECK(menu.act() == 1);
-  for (int i = 0; i < menu.itemCount() - 1; ++i) tap(menu, BUTTON_DOWN);
-  tap(menu, BUTTON_RIGHT);  // 换到 BOSS 更少的一幕：光标夹到最后一项
-  CHECK(menu.cursor() == menu.itemCount() - 1);
+  const int lastOfAct1 = menu.itemCount() - 1;
+  for (int i = 0; i < lastOfAct1; ++i) tap(menu, BUTTON_DOWN);
+  for (int act = 2; act <= ACT_COUNT; ++act) {  // 换幕后光标不越过新一页的最后一项
+    tap(menu, BUTTON_RIGHT);
+    CHECK(menu.cursor() <= menu.itemCount() - 1);
+    CHECK(menu.cursor() == (lastOfAct1 < menu.itemCount() ? lastOfAct1 : menu.itemCount() - 1));
+  }
 }
 
 static void testTable() {
@@ -92,7 +96,15 @@ static void testTable() {
     CHECK(boss.flagCount <= MAX_BOSS_FLAGS);
     CHECK(std::strlen(boss.scene) > 0 && std::strlen(boss.gate) > 0);  // 空门名会让画面一直黑着
     CHECK(std::strncmp(boss.nameKey, "NAME_", 5) == 0);
+    CHECK(boss.sceneBoolCount <= MAX_SCENE_BOOLS && boss.fixupCount <= MAX_FIXUPS);
+    for (size_t f = 0; f < boss.fixupCount; ++f) {
+      const Fixup& fixup = boss.fixups[f];
+      const bool isFsm = fixup.kind == FixupKind::FsmEvent || fixup.kind == FixupKind::FsmState;
+      CHECK(fixup.path != nullptr && (!isFsm || (fixup.fsm != nullptr && fixup.name != nullptr)));
+    }
+    if (isRepeatedNameKey(i)) CHECK(boss.fallbackZh != nullptr && boss.fallbackEn != nullptr);  // 重名的用后备名
   }
+  for (int act = 1; act <= ACT_COUNT; ++act) CHECK(bossCountInAct(act) > 0);
   CHECK(bossIndexInAct(1, bossCountInAct(1)) == -1);
 }
 

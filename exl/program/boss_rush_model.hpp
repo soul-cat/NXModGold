@@ -115,6 +115,14 @@ inline bool isBossFlag(const BossEntry& boss, const char* name) {
   return false;
 }
 
+/// 表里前面有没有同一个猎人日志条目的 BOSS（如苔藓之母与双苔藓之母）：有的话菜单用表里能区分的后备名
+inline bool isRepeatedNameKey(size_t index) {
+  for (size_t i = 0; i < index; ++i) {
+    if (std::strcmp(BOSSES[i].nameKey, BOSSES[index].nameKey) == 0) return true;
+  }
+  return false;
+}
+
 constexpr int MAX_VISIBLE_ITEMS = 12;  // 一屏最多显示几项，多了随光标滚动
 
 /// 可见窗口的第一项：让光标保持在窗口内，尽量居中，不越过列表两端

@@ -129,6 +129,14 @@ inline void setInvincible(bool isInvincible) {
   if (playerData != nullptr) call<void>(PD_SETBOOL, playerData, managedString("isInvincible"), isInvincible);
 }
 
+/// 被拦下的 BOSS 死亡 / 结局流程会先置 disablePause、disableInventory（苍白之母、初罪者），传送时复位
+inline void clearCutsceneLocks() {
+  void* playerData = call<void*>(PD_GETINSTANCE);
+  if (playerData == nullptr) return;
+  call<void>(PD_SETBOOL, playerData, managedString("disablePause"), false);
+  call<void>(PD_SETBOOL, playerData, managedString("disableInventory"), false);
+}
+
 inline const void* sceneLoadInfoClass() {
   auto* slot = reinterpret_cast<const void* const*>(exl::util::modules::GetTargetOffset(SLI_TYPEINFO));
   if (*slot == nullptr) ui::mainFunction<void (*)(const void*, bool)>(IL2CPP_INIT_METADATA)(slot, true);
@@ -190,8 +198,8 @@ inline void* findByPath(const char* path) {
 inline bool runFixup(const Fixup& fixup) {
   void* target = findByPath(fixup.path);
   if (target == nullptr) return false;
-  if (fixup.kind == FixupKind::Activate) {
-    call<void>(GO_SETACTIVE, target, true);
+  if (fixup.kind == FixupKind::Activate || fixup.kind == FixupKind::Deactivate) {
+    call<void>(GO_SETACTIVE, target, fixup.kind == FixupKind::Activate);
     return true;
   }
   void* component = fsm::componentOn(target, fixup.fsm);

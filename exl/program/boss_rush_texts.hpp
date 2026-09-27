@@ -1,7 +1,8 @@
 // BOSS 挑战菜单上的文字（托管字符串，第一次打开菜单时建好并钉住，之后常驻）。
 //
 // BOSS 名取猎人日志的本地化文本：LocalisedString 是 {表名, 键} 两个字符串的值类型，原生拼一个传给
-// LocalisedString.ToString（跟随游戏语言）。取不到（缺词时是 '!' / '#' 开头的占位）才用表里的后备名。
+// LocalisedString.ToString（跟随游戏语言）。取不到（缺词时是 '!' / '#' 开头的占位）才用表里的后备名；
+// 同一个日志条目在表里再次出现（双苔藓之母、狂暴螺蝇、蕾丝二见…）也用后备名，免得菜单里两项同名。
 
 #pragma once
 
@@ -71,7 +72,11 @@ inline void ensureTexts() {
   for (int i = 0; i < ACT_COUNT; ++i) g_texts.actTitles[i] = utf16Text((isChinese ? ACT_TITLES_ZH : ACT_TITLES_EN)[i]);
   for (int i = 0; i < FIXED_ITEM_COUNT; ++i) g_texts.fixedItems[i] = utf16Text((isChinese ? FIXED_ZH : FIXED_EN)[i]);
   g_texts.hint = utf16Text(isChinese ? HINT_ZH : HINT_EN);
-  for (size_t i = 0; i < BOSS_COUNT; ++i) g_texts.bossNames[i] = bossNameText(BOSSES[i], isChinese);
+  for (size_t i = 0; i < BOSS_COUNT; ++i) {
+    const BossEntry& boss = BOSSES[i];
+    g_texts.bossNames[i] = isRepeatedNameKey(i) ? utf16Text(isChinese ? boss.fallbackZh : boss.fallbackEn)
+                                                : bossNameText(boss, isChinese);
+  }
   g_texts.isReady = true;
 }
 

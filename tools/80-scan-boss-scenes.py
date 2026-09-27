@@ -6,7 +6,8 @@ BOSS 挑战要把「已击败」之类的标记改回去，BOSS 才会重新出�
 只要等于某个 PlayerData 字段名，就是这个场景读写的标记。本脚本把它们连同所在 GameObject 路径列出来，
 并标出该字段在参考存档（默认 100% 存档）里的值，供人工整理 BOSS 表。
 另外列出 GATE（TransitionPoint：门名 → 目标场景）和 PBOOL（PersistentBoolItem：场景/ID 与存档里的值，
-为 True 的通常表示「这场战斗已打完 / 物体已触发」）。
+为 True 的通常表示「这场战斗已打完 / 物体已触发」）。PBOOL 在附加分块（*_boss）里时，存档实际记在主场景名下，
+这里打印的是资源包名（小写），查存档值时按主场景名看。
 
 资源包从 RomFS 解出（tools/ncaext --match，见 HANDOFF），放在 work/bundles/（gitignore）。
 需要 UnityPy（work/pyenv）。
