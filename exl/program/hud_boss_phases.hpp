@@ -8,23 +8,14 @@
 
 #pragma once
 
-#include "boss_detect.hpp"
+#include "fsm_lookup.hpp"
 #include "hud_model.hpp"
-#include "options_menu_calls.hpp"
-
-#include <cstring>
 
 namespace sshud::hud {
 
 namespace ui = sshud::unity;
 
 constexpr const char* PHASE_FSM_NAME = "Phase Control";
-
-/// 托管字符串 → ASCII 后与 expected 比较
-inline bool isNamed(ui::ManagedString text, const char* expected) {
-  char ascii[options::NAME_CAPACITY];
-  return std::strcmp(options::asciiOf(text, ascii, sizeof(ascii)), expected) == 0;
-}
 
 /// Fsm.variables.intVariables 里的 "P<n> HP" 填进段表；编号不连续返回空表
 inline PhasePlan phasePlanOf(const void* fsm) {
@@ -44,22 +35,10 @@ inline PhasePlan phasePlanOf(const void* fsm) {
   return plan;
 }
 
-/// manager 所在 GameObject 上名为 Phase Control 的 FSM；没有返回 null
+/// manager 所在 GameObject 上名为 Phase Control 的 FSM（Fsm 对象）；没有返回 null
 inline const void* phaseFsmOf(const void* manager) {
-  const void* statics = staticFieldsOf(PMFSM_TYPEINFO);
-  const void* list = statics != nullptr ? ui::readField<const void*>(statics, PMFSM_FSMLIST_STATIC) : nullptr;
-  const void* items = list != nullptr ? ui::readField<const void*>(list, IL2CPP_LIST_ITEMS) : nullptr;
-  if (items == nullptr) return nullptr;
-  const void* owner = map::gameObjectOf(const_cast<void*>(manager));
-  const int32_t size = ui::readField<int32_t>(list, IL2CPP_LIST_SIZE);
-  const auto capacity = static_cast<int32_t>(ui::readField<uint64_t>(items, IL2CPP_ARRAY_LENGTH_FIELD));
-  for (int32_t i = 0; i < size && i < capacity; ++i) {
-    void* component = ui::readField<void*>(items, IL2CPP_ARRAY_FIRST_ITEM + i * sizeof(void*));
-    const void* fsm = ui::isAlive(component) ? ui::readField<const void*>(component, PMFSM_FSM) : nullptr;
-    if (fsm == nullptr || !isNamed(ui::readField<ui::ManagedString>(fsm, FSM_NAME), PHASE_FSM_NAME)) continue;
-    if (map::gameObjectOf(component) == owner) return fsm;  // 名字对上了才做托管调用
-  }
-  return nullptr;
+  void* component = fsm::componentOn(map::gameObjectOf(const_cast<void*>(manager)), PHASE_FSM_NAME);
+  return component != nullptr ? ui::readField<const void*>(component, PMFSM_FSM) : nullptr;
 }
 
 /// 判定为分段 BOSS 时调用一次：段表可用（isChunkPlan）就返回它，否则空表（退回 initHp − 累计掉血）

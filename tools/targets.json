@@ -1447,6 +1447,18 @@
       "kind": "method",
       "script_name": "SceneData.PersistentItemDataCollection<bool, object>$$SetValue",
       "_note": "共享泛型：void (coll, PersistentItemData<bool> data, MI)；data: ID 0x10, SceneName 0x18, Value 0x21（反汇编核实）；PersistentBoolItem.SaveValue 调它"
+    },
+    {
+      "name": "PMFSM_SENDEVENT",
+      "kind": "method",
+      "script_name": "PlayMakerFSM$$SendEvent",
+      "_note": "void (PlayMakerFSM* self, string eventName, MI)"
+    },
+    {
+      "name": "PMFSM_SETSTATE",
+      "kind": "method",
+      "script_name": "PlayMakerFSM$$SetState",
+      "_note": "void (PlayMakerFSM* self, string stateName, MI)"
     }
   ]
 }

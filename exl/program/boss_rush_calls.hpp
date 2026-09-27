@@ -1,4 +1,5 @@
-// BOSS 挑战用到的游戏调用：切场景、改 PlayerData 标记、到场后激活物体、锁操作、回满状态。
+// BOSS 挑战用到的游戏调用：切场景、改 PlayerData 标记与场景持久标记、到场修正（激活物体 / 状态机事件 / 跳状态）、
+// 锁操作、无敌、时间复位、回满状态。
 //
 // 切场景照游戏自己的写法（HeroController.HazardRespawn 反汇编）：object_new(SceneLoadInfo) → .ctor →
 // 填 SceneName / EntryGateName → GameManager.BeginSceneTransition。其余字段保持构造默认值，由游戏自己淡出淡入。
@@ -8,6 +9,7 @@
 #pragma once
 
 #include "boss_rush_table.hpp"
+#include "fsm_lookup.hpp"
 #include "map_calls.hpp"
 #include "map_collected.hpp"
 #include "options_menu_calls.hpp"
@@ -58,15 +60,20 @@ inline void applyFlags(const BossEntry& boss) {
   }
 }
 
+inline const char* sceneOf(const BossEntry& boss, const SceneBool& sceneBool) {
+  return sceneBool.scene != nullptr ? sceneBool.scene : boss.scene;
+}
+
 /// 场景持久标记：TryGetValue 拿到的是集合里那份数据对象（引用类型），直接改它的值。
 /// 查不到（从没存过）就是默认的 false，不用管。
 inline void applySceneBools(const BossEntry& boss) {
   for (size_t i = 0; i < boss.sceneBoolCount; ++i) {
-    const map::EntryStrings strings{managedString(boss.scene), managedString(boss.sceneBools[i].id)};
+    const SceneBool& sceneBool = boss.sceneBools[i];
+    const map::EntryStrings strings{managedString(sceneOf(boss, sceneBool)), managedString(sceneBool.id)};
     const uint8_t* record = map::findBoolRecord(strings);
-    if (record != nullptr) ui::writeField<bool>(const_cast<uint8_t*>(record), map::PERSISTENT_BOOL_VALUE, boss.sceneBools[i].value);
-    Logging.Log("[sshud] boss rush: scene bool %s/%s=%d%s", boss.scene, boss.sceneBools[i].id,
-                boss.sceneBools[i].value ? 1 : 0, record != nullptr ? "" : " (no record)");
+    if (record != nullptr) ui::writeField<bool>(const_cast<uint8_t*>(record), map::PERSISTENT_BOOL_VALUE, sceneBool.value);
+    Logging.Log("[sshud] boss rush: scene bool %s/%s=%d%s", sceneOf(boss, sceneBool), sceneBool.id, sceneBool.value ? 1 : 0,
+                record != nullptr ? "" : " (no record)");
   }
 }
 
@@ -123,20 +130,31 @@ inline bool isInScene(const char* scene) {
                      scene) == 0;
 }
 
-/// 激活 "根/子/…"：根用 GameObject.Find（须激活），其余用 Transform.Find（能找到停用的子物体）
-inline bool activatePath(const char* path) {
+/// "根/子/…" 对应的 GameObject：根用 GameObject.Find（须激活），其余用 Transform.Find（能找到停用的子物体）
+inline void* findByPath(const char* path) {
   char root[PATH_CAPACITY];
   const char* slash = std::strchr(path, '/');
   const size_t rootLength = slash != nullptr ? static_cast<size_t>(slash - path) : std::strlen(path);
-  if (rootLength >= sizeof(root)) return false;
+  if (rootLength >= sizeof(root)) return nullptr;
   std::memcpy(root, path, rootLength);
   root[rootLength] = '\0';
   void* rootObject = call<void*>(GO_FIND, managedString(root));
-  if (!ui::isAlive(rootObject)) return false;
-  void* transform = call<void*>(GO_GETTRANSFORM, rootObject);
-  if (slash != nullptr) transform = call<void*>(TR_FIND, transform, managedString(slash + 1));
-  if (!ui::isAlive(transform)) return false;
-  call<void>(GO_SETACTIVE, map::gameObjectOf(transform), true);
+  if (!ui::isAlive(rootObject) || slash == nullptr) return ui::isAlive(rootObject) ? rootObject : nullptr;
+  void* transform = call<void*>(TR_FIND, call<void*>(GO_GETTRANSFORM, rootObject), managedString(slash + 1));
+  return ui::isAlive(transform) ? map::gameObjectOf(transform) : nullptr;
+}
+
+/// 执行一条到场修正；找不到物体 / 状态机返回 false
+inline bool runFixup(const Fixup& fixup) {
+  void* target = findByPath(fixup.path);
+  if (target == nullptr) return false;
+  if (fixup.kind == FixupKind::Activate) {
+    call<void>(GO_SETACTIVE, target, true);
+    return true;
+  }
+  void* component = fsm::componentOn(target, fixup.fsm);
+  if (component == nullptr) return false;
+  call<void>(fixup.kind == FixupKind::FsmEvent ? PMFSM_SENDEVENT : PMFSM_SETSTATE, component, managedString(fixup.name));
   return true;
 }
 

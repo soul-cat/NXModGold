@@ -108,6 +108,17 @@ static void testBossSlotPath() {
   CHECK(!isBossSlotPath("save:/user40.dat"));
 }
 
+static void testVisibleWindow() {
+  CHECK(firstVisibleItem(5, 10, 12) == 0);   // 放得下：不滚
+  CHECK(firstVisibleItem(0, 20, 12) == 0);
+  CHECK(firstVisibleItem(10, 20, 12) == 4);  // 光标居中
+  CHECK(firstVisibleItem(19, 20, 12) == 8);  // 到底：窗口贴底
+  for (int cursor = 0; cursor < 20; ++cursor) {
+    const int first = firstVisibleItem(cursor, 20, 12);
+    CHECK(cursor >= first && cursor < first + 12);
+  }
+}
+
 int main() {
   testOpenCombo();
   testNavigateAndConfirm();
@@ -115,6 +126,7 @@ int main() {
   testPagesWrapAndClamp();
   testTable();
   testBossSlotPath();
+  testVisibleWindow();
   if (g_failures == 0) std::printf("test_boss_rush_model: all passed\n");
   return g_failures == 0 ? 0 : 1;
 }

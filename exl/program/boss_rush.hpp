@@ -1,7 +1,7 @@
 // BOSS 挑战（4 号位专用）的运行时：每帧读手柄 → 菜单 → 执行命令；传送后跟踪到场。
 //
 // 流程：按住 R3 按 ZR 打开菜单（锁操作 + 无敌）→ 选 BOSS → 改 PlayerData 标记与场景持久标记（boss_rush_table.hpp）
-// → 时间流速复位 → 切到 BOSS 场景的门 → 到场后再复位一次时间、约 1 秒后做表里的修正、解除无敌。
+// → 时间流速复位 → 切到 BOSS 场景的门 → 到场后再复位一次时间、约 1 秒后做表里的到场修正、解除无敌。
 // 传送途中每秒记一行（是否在切场景、时间流速、场景名）并立即写盘：之前在 BOSS 战中途切走会卡死，
 // 日志能区分「卡在加载」（还在记）和「主线程停了」（断了）。4 号位不存档（boss_rush_save_guard.hpp）。
 // 关菜单后等 A / B 松开才还操作，免得确认键被游戏当成跳跃 / 冲刺。
@@ -80,8 +80,12 @@ inline void updateTravel(float now) {
     resetTime();
   }
   if (now < g_travel.arrivedAt + ARRIVAL_SETTLE_SECONDS) return;
-  const char* path = g_travel.boss != nullptr ? g_travel.boss->activatePath : nullptr;
-  if (path != nullptr) Logging.Log("[sshud] boss rush: activate %s -> %s", path, activatePath(path) ? "ok" : "not found");
+  const size_t fixupCount = g_travel.boss != nullptr ? g_travel.boss->fixupCount : 0;
+  for (size_t i = 0; i < fixupCount; ++i) {
+    const Fixup& fixup = g_travel.boss->fixups[i];
+    Logging.Log("[sshud] boss rush: fixup %s %s %s -> %s", fixup.path, fixup.fsm != nullptr ? fixup.fsm : "",
+                fixup.name != nullptr ? fixup.name : "activate", runFixup(fixup) ? "ok" : "not found");
+  }
   finishTravel("arrived");
 }
 
@@ -131,13 +135,11 @@ inline void overridePersistentWrite(void* data) {
   if (boss == nullptr || boss->sceneBoolCount == 0 || data == nullptr) return;
   char scene[options::NAME_CAPACITY];
   char id[options::NAME_CAPACITY];
-  if (std::strcmp(options::asciiOf(ui::readField<ui::ManagedString>(data, PERSISTENT_DATA_SCENE), scene, sizeof(scene)),
-                  boss->scene) != 0) {
-    return;
-  }
+  options::asciiOf(ui::readField<ui::ManagedString>(data, PERSISTENT_DATA_SCENE), scene, sizeof(scene));
   options::asciiOf(ui::readField<ui::ManagedString>(data, PERSISTENT_DATA_ID), id, sizeof(id));
   for (size_t i = 0; i < boss->sceneBoolCount; ++i) {
-    if (std::strcmp(id, boss->sceneBools[i].id) != 0) continue;
+    const SceneBool& sceneBool = boss->sceneBools[i];
+    if (std::strcmp(id, sceneBool.id) != 0 || std::strcmp(scene, sceneOf(*boss, sceneBool)) != 0) continue;
     ui::writeField<bool>(data, PERSISTENT_DATA_VALUE, boss->sceneBools[i].value);
     Logging.Log("[sshud] boss rush: kept scene bool %s/%s=%d while leaving", scene, id, boss->sceneBools[i].value ? 1 : 0);
   }

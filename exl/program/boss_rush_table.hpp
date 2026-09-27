@@ -1,6 +1,7 @@
 // BOSS 挑战的 BOSS 表（纯数据，不依赖 Unity / nn）。
 //
-// 每一项：从哪个场景的哪个门进、进之前把哪些 PlayerData 标记改成什么、到场后激活哪个物体。
+// 每一项：从哪个场景的哪个门进、进之前把哪些 PlayerData 标记改成什么、到场后做哪些修正
+// （激活物体 / 给 BOSS 状态机发事件 / 让状态机跳到某个状态）。
 // 标记来自场景资源包（tools/80-scan-boss-scenes.py 列出场景检查的字段），对照 100% 存档（4 号位）的值：
 //   - defeated* 为 true 时 BOSS 战场景被停用 → 改成 false；
 //   - encountered* 保持 true：跳过初见演出，进门直接开打；
@@ -20,6 +21,7 @@ namespace sshud::bossrush {
 
 constexpr size_t MAX_BOSS_FLAGS = 4;
 constexpr size_t MAX_SCENE_BOOLS = 4;
+constexpr size_t MAX_FIXUPS = 3;
 constexpr int ACT_COUNT = 3;
 
 struct BossFlag {
@@ -28,8 +30,19 @@ struct BossFlag {
 };
 
 struct SceneBool {
-  const char* id;  // BOSS 场景里带 PersistentBoolItem 的物体名
+  const char* scene;  // nullptr = BOSS 所在场景；附加分块场景（如 Bone_05_boss）里的标记写分块名
+  const char* id;     // 带 PersistentBoolItem 的物体名
   bool value;
+};
+
+enum class FixupKind { Activate, FsmEvent, FsmState };
+
+/// 到场后的修正：path 是 "根/子/…"（根须激活，子可以停用）；FsmEvent / FsmState 找 path 上名为 fsm 的状态机
+struct Fixup {
+  FixupKind kind;
+  const char* path;
+  const char* fsm;   // Activate 时为 nullptr
+  const char* name;  // 事件名 / 状态名；Activate 时为 nullptr
 };
 
 struct BossEntry {
@@ -43,18 +56,19 @@ struct BossEntry {
   size_t flagCount;
   SceneBool sceneBools[MAX_SCENE_BOOLS];
   size_t sceneBoolCount;
-  const char* activatePath;   // 到场后激活的物体（根/子/…；可停用的子物体也行），nullptr = 不需要
+  Fixup fixups[MAX_FIXUPS];
+  size_t fixupCount;
 };
 
 constexpr const char* JOURNAL_SHEET = "Journal";
 
 constexpr BossEntry BOSSES[] = {
     {"NAME_MOSSBONE_MOTHER", u"苔藓之母", u"Moss Mother", 1, "Tut_03", "right1",
-     {{"defeatedMossMother", false}, {"blackThreadWorld", false}}, 2, {{"Battle Scene", false}}, 1, nullptr},
+     {{"defeatedMossMother", false}, {"blackThreadWorld", false}}, 2, {{nullptr, "Battle Scene", false}}, 1, {}, 0},
     {"NAME_SPLINTER_QUEEN", u"碎裂者修女", u"Sister Splinter", 1, "Shellwood_18", "right1",
-     {{"defeatedSplinterQueen", false}, {"blackThreadWorld", false}}, 2, {}, 0, nullptr},
+     {{"defeatedSplinterQueen", false}, {"blackThreadWorld", false}}, 2, {}, 0, {}, 0},
     {"NAME_SKULL_KING", u"骷髅暴君", u"Skull Tyrant", 1, "Bone_15", "left1",
-     {{"skullKingDefeated", false}, {"blackThreadWorld", false}}, 2, {}, 0, nullptr},
+     {{"skullKingDefeated", false}, {"blackThreadWorld", false}}, 2, {}, 0, {}, 0},
 };
 constexpr size_t BOSS_COUNT = sizeof(BOSSES) / sizeof(BOSSES[0]);
 

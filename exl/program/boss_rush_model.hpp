@@ -63,6 +63,16 @@ inline int bossCountInAct(int act) {
   return count;
 }
 
+constexpr int MAX_VISIBLE_ITEMS = 12;  // 一屏最多显示几项，多了随光标滚动
+
+/// 可见窗口的第一项：让光标保持在窗口内，尽量居中，不越过列表两端
+inline int firstVisibleItem(int cursor, int count, int maxVisible) {
+  if (count <= maxVisible) return 0;
+  const int centered = cursor - maxVisible / 2;
+  const int last = count - maxVisible;
+  return centered < 0 ? 0 : (centered > last ? last : centered);
+}
+
 class BossMenu {
  public:
   bool isOpen() const { return isOpen_; }

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""扫描 BOSS 场景资源包：场景加载 / BOSS 登场时检查了哪些 PlayerData 字段、哪些场景持久标记。
+"""扫描 BOSS 场景资源包：入口门、场景持久标记，以及场景加载 / BOSS 登场时检查了哪些 PlayerData 字段。
 
 BOSS 挑战要把「已击败」之类的标记改回去，BOSS 才会重新出现。哪些标记起作用写在场景数据里：
 组件（PlayerDataTest、TestGameObjectActivator…）和 PlayMaker 状态机的动作参数里出现的字符串，
 只要等于某个 PlayerData 字段名，就是这个场景读写的标记。本脚本把它们连同所在 GameObject 路径列出来，
 并标出该字段在参考存档（默认 100% 存档）里的值，供人工整理 BOSS 表。
+另外列出 GATE（TransitionPoint：门名 → 目标场景）和 PBOOL（PersistentBoolItem：场景/ID 与存档里的值，
+为 True 的通常表示「这场战斗已打完 / 物体已触发」）。
 
 资源包从 RomFS 解出（tools/ncaext --match，见 HANDOFF），放在 work/bundles/（gitignore）。
 需要 UnityPy（work/pyenv）。
@@ -94,7 +96,30 @@ def fsm_string_hits(fsm: dict, names: set[str]) -> list[tuple[str, str]]:
     return hits
 
 
-def scan_scene(bundle: Path, names: set[str], save_values: dict) -> None:
+def scene_bool_lookup(save_scene: dict) -> dict:
+    """存档 sceneData.persistentBools：(场景名小写, ID) → 值"""
+    items = save_scene.get("persistentBools", {}).get("serializedList", [])
+    return {(e["SceneName"].lower(), e["ID"]): e["Value"] for e in items}
+
+
+def report_structure(obj, tree: dict, scene: str, scene_bools: dict) -> bool:
+    """入口门（TransitionPoint）与场景持久标记（PersistentBoolItem）；是这两类返回 True"""
+    if "targetScene" in tree and "entryPoint" in tree:
+        go = tree_go(obj)
+        print(f"  GATE  {go.m_Name:28s} -> {tree['targetScene']} ({tree['entryPoint']})")
+        return True
+    if "itemData" in tree and "saveCondition" in tree:
+        go = tree_go(obj)
+        item = tree["itemData"]
+        item_id = item.get("ID") or go.m_Name
+        item_scene = item.get("SceneName") or scene
+        value = scene_bools.get((item_scene.lower(), item_id))
+        print(f"  PBOOL {item_scene}/{item_id:40s} save={value!s:6s} @ {game_object_path(go)}")
+        return True
+    return False
+
+
+def scan_scene(bundle: Path, names: set[str], save_values: dict, scene_bools: dict) -> None:
     UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     env = UnityPy.load(str(bundle))
     print(f"\n######## {bundle.stem}")
@@ -106,6 +131,11 @@ def scan_scene(bundle: Path, names: set[str], save_values: dict) -> None:
             tree = obj.read_typetree()
         except Exception:  # noqa: BLE001 - 个别组件类型树读不出，跳过
             continue
+        try:
+            if report_structure(obj, tree, bundle.stem, scene_bools):
+                continue
+        except Exception:  # noqa: BLE001
+            pass
         hits = []
         if "fsm" in tree and isinstance(tree["fsm"], dict):
             hits = [(f"FSM '{tree['fsm'].get('name')}' {where}", s) for where, s in fsm_string_hits(tree["fsm"], names)]
@@ -138,13 +168,15 @@ def main() -> int:
     args = parser.parse_args()
     fields = player_data_fields()
     names = {n for n, t in fields.items() if t in ("bool", "int", "string")}
-    save_values = json.loads(Path(args.save).read_text())["playerData"] if args.save else {}
+    save = json.loads(Path(args.save).read_text()) if args.save else {}
+    save_values = save.get("playerData", {})
+    scene_bools = scene_bool_lookup(save.get("sceneData", {}))
     for scene in args.scenes:
         bundles = sorted(BUNDLE_DIR.glob(f"{scene.lower()}*.bundle"))
         if not bundles:
             print(f"[!] 没有 {scene} 的资源包", file=sys.stderr)
         for bundle in bundles:
-            scan_scene(bundle, names, save_values)
+            scan_scene(bundle, names, save_values, scene_bools)
     return 0
 
 
