@@ -390,6 +390,37 @@
       "namespace": "HutongGames.PlayMaker",
       "field": "value",
       "required": true
+    },
+    {
+      "name": "SLI_SCENENAME",
+      "class": "GameManager.SceneLoadInfo",
+      "field": "SceneName",
+      "required": true
+    },
+    {
+      "name": "SLI_ENTRYGATENAME",
+      "class": "GameManager.SceneLoadInfo",
+      "field": "EntryGateName",
+      "required": true
+    },
+    {
+      "name": "GAMEMGR_SCENENAME",
+      "class": "GameManager",
+      "field": "sceneName",
+      "required": true
+    },
+    {
+      "name": "GAMEMGR_PROFILEID",
+      "class": "GameManager",
+      "field": "profileID",
+      "required": true,
+      "_note": "当前存档位（1..4，与 user{N}.dat 一致）"
+    },
+    {
+      "name": "HC_INPUTHANDLER",
+      "class": "HeroController",
+      "field": "inputHandler",
+      "required": true
     }
   ],
   "methods": [
@@ -1238,6 +1269,56 @@
       "method": "SetDefaultFont",
       "required": true,
       "namespace": "UnityEngine"
+    },
+    {
+      "name": "GAMEMGR_BEGINSCENETRANSITION",
+      "class": "GameManager",
+      "method": "BeginSceneTransition",
+      "required": true
+    },
+    {
+      "name": "PD_SETBOOL",
+      "class": "PlayerData",
+      "method": "SetBool",
+      "required": true
+    },
+    {
+      "name": "HC_REFILLALL",
+      "class": "HeroController",
+      "method": "RefillAll",
+      "required": true
+    },
+    {
+      "name": "IH_STOPACCEPTINGINPUT",
+      "class": "InputHandler",
+      "method": "StopAcceptingInput",
+      "required": true
+    },
+    {
+      "name": "IH_STARTACCEPTINGINPUT",
+      "class": "InputHandler",
+      "method": "StartAcceptingInput",
+      "required": true
+    },
+    {
+      "name": "GO_FIND",
+      "class": "GameObject",
+      "namespace": "UnityEngine",
+      "method": "Find",
+      "required": true,
+      "signature_contains": "Find(string name)"
+    },
+    {
+      "name": "GAMEMGR_GETISINSCENETRANSITION",
+      "class": "GameManager",
+      "method": "get_IsInSceneTransition",
+      "required": true
+    },
+    {
+      "name": "GAMEMGR_GETHEROCTRL",
+      "class": "GameManager",
+      "method": "get_hero_ctrl",
+      "required": true
     }
   ],
   "script": [
@@ -1311,6 +1392,33 @@
       "name": "PMFSM_TYPEINFO",
       "kind": "type_slot",
       "script_name": "PlayMakerFSM_TypeInfo"
+    },
+    {
+      "name": "SLI_TYPEINFO",
+      "kind": "type_slot",
+      "script_name": "GameManager.SceneLoadInfo_TypeInfo"
+    },
+    {
+      "name": "SLI_CTOR",
+      "kind": "method",
+      "script_name": "GameManager.SceneLoadInfo$$.ctor"
+    },
+    {
+      "name": "SWITCHPLATFORM_WRITESAVESLOT",
+      "kind": "method",
+      "script_name": "SwitchPlatform$$WriteSaveSlot",
+      "_note": "void (this, int slotIndex, byte[] bytes, Action<bool> callback, MI)；文件名 user{slotIndex}.dat"
+    },
+    {
+      "name": "SSRH_WRITESAVERESTOREPOINT",
+      "kind": "method",
+      "script_name": "SwitchSaveRestoreHandler$$WriteSaveRestorePoint",
+      "_note": "void (this, int slot, string identifier, bool noDelete, byte[] bytes, Action<bool> callback, MI)"
+    },
+    {
+      "name": "ACTION_BOOL_INVOKE",
+      "kind": "method",
+      "script_name": "System.Action<bool>$$Invoke"
     }
   ]
 }

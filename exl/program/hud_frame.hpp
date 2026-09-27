@@ -66,18 +66,22 @@ struct Frame {
 
 inline ui::Rect toUi(const Rect& r) { return {r.x, r.y, r.width, r.height}; }
 
-/// 以 (centerX, centerY) 为中心画一行字；字号按 FONT_SIZE_STEP 取整，免得动态字体反复重建图集
-inline void drawText(const Frame& frame, float centerX, float centerY, float fontSize,
-                     ui::ManagedString text, ui::Color color) {
+/// 以 (centerX, centerY) 为中心、在 boxWidth 宽的框里画一行字；字号按 FONT_SIZE_STEP 取整，免得动态字体反复重建图集
+inline void drawTextInWidth(const Frame& frame, float centerX, float centerY, float boxWidth, float fontSize,
+                            ui::ManagedString text, ui::Color color) {
   if (text == nullptr) return;
   const int32_t fontPixels = quantizeFontSize(fontSize);
-  const float size = static_cast<float>(fontPixels);
-  const float boxWidth = size * TEXT_BOX_WIDTH_FACTOR;
-  const float boxHeight = size * 2.0f;
+  const float boxHeight = static_cast<float>(fontPixels) * 2.0f;
   ui::setStyleFontSize(frame.style, fontPixels);
   ui::setGuiContentColor(color);
-  ui::label({centerX - boxWidth * 0.5f, centerY - boxHeight * 0.5f, boxWidth, boxHeight}, text,
-            frame.style);
+  ui::label({centerX - boxWidth * 0.5f, centerY - boxHeight * 0.5f, boxWidth, boxHeight}, text, frame.style);
+}
+
+/// 短文字（数字、BOSS 名）：框宽 = 字号 × TEXT_BOX_WIDTH_FACTOR
+inline void drawText(const Frame& frame, float centerX, float centerY, float fontSize,
+                     ui::ManagedString text, ui::Color color) {
+  const float boxWidth = static_cast<float>(quantizeFontSize(fontSize)) * TEXT_BOX_WIDTH_FACTOR;
+  drawTextInWidth(frame, centerX, centerY, boxWidth, fontSize, text, color);
 }
 
 /// 世界坐标 → IMGUI 坐标（原点左上）；在相机背后返回 false

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "boss_detect.hpp"
+#include "boss_rush.hpp"
 #include "hud_draw.hpp"
 #include "hud_model.hpp"
 #include "lib.hpp"
@@ -85,7 +86,11 @@ HOOK_DEFINE_TRAMPOLINE(CameraLateUpdateHook) {
     sshud::sdlog::flushIfDue(sshud::unity::unscaledTime());
     sshud::saveexport::runOnce();  // 先导出再导入：导出的是导入前的原样存档
     sshud::saveimport::runOnce();
-    sshud::toggles::pollInput();
+    if (sshud::bossrush::update(sshud::unity::unscaledTime())) {
+      sshud::toggles::g_isMenuOpen = false;  // BOSS 菜单开着时 R3 可能还按着：快捷面板不处理
+    } else {
+      sshud::toggles::pollInput();
+    }
     sshud::hud::scanForBosses(sshud::hud::g_model, sshud::unity::unscaledTime());
     void* gui = sshud::unity::ensurePlayMakerGui();
     if (!s_announced && gui != nullptr) {

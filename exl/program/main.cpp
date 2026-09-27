@@ -95,6 +95,7 @@ extern "C" void exl_main(void* x0, void* x1) {
   sshud::options::installHooks();
   sshud::delivery::installHooks();
   sshud::crest::installHooks();
+  sshud::bossrush::installHooks();
 }
 
 extern "C" NORETURN void exl_exception_entry() {

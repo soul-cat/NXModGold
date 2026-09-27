@@ -9,6 +9,7 @@
 #pragma once
 
 #include "bar_textures.hpp"
+#include "boss_rush_draw.hpp"
 #include "hud_boss_log.hpp"
 #include "hud_boss_phases.hpp"
 #include "hud_frame.hpp"
@@ -229,7 +230,8 @@ inline void drawHud(HudModel& model, const toggles::Settings& settings, bool isM
   const float now = ui::unscaledTime();
   model.expire(now);
   releaseInactiveTexts(model);
-  if (model.isEmpty() && !isMenuOpen) return;  // 没东西可画：省掉下面保存/还原状态与取屏幕/相机的约 20 次托管调用
+  const bool isBossMenuOpen = bossrush::g_menu.isOpen();
+  if (model.isEmpty() && !isMenuOpen && !isBossMenuOpen) return;  // 没东西可画：省掉下面保存/还原状态与取屏幕/相机的约 20 次托管调用
   ImguiStateGuard guard;
   const Frame frame = beginFrame(guard.style(), now);
   drawEnemies(frame, model, settings);
@@ -238,7 +240,8 @@ inline void drawHud(HudModel& model, const toggles::Settings& settings, bool isM
       if (model.popups()[i].active) drawPopup(frame, model.popups()[i], i);
     }
   }
-  drawMenu(frame, settings, isMenuOpen);  // 最后画，压在最上层
+  drawMenu(frame, settings, isMenuOpen && !isBossMenuOpen);
+  drawBossMenu(frame);  // 最后画，压在最上层
 }
 
 }  // namespace sshud::hud

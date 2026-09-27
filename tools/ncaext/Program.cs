@@ -1,5 +1,7 @@
 // 从（可能压缩/增量更新的）Silksong NCA 里抽出 RomFS 文件。
 // 用法: ncaext <prod.keys> <title.keys> <base.nca> <upd.nca|-> <输出文件> [RomFS内路径]
+//       ncaext <prod.keys> <title.keys> <base.nca> <upd.nca|-> <输出目录> --list | --match <子串>...
+//         --list 打印 RomFS 全部文件（大小 \t 路径）；--match 只解出路径含任一子串的文件（不区分大小写）
 // 依赖 LibHac：nstool 不支持固件 16+ 的 NCA 压缩分区，LibHac 是唯一能完整读取的库。
 using System;
 using System.IO;
@@ -23,6 +25,12 @@ class Program
         }
         string prodKeys = args[0], titleKeys = args[1], baseNca = args[2], updNca = args[3], outFile = args[4];
         string innerPath = args.Length > 5 ? args[5] : "/Data/il2cpp_data/Metadata/global-metadata.dat";
+
+        if (args.Length > 5 && (args[5] == "--list" || args[5] == "--match"))
+        {
+            ListOrMatch(LoadKeySet(prodKeys, titleKeys), baseNca, updNca, args[4], args[5] == "--list", args[6..]);
+            return 0;
+        }
 
         if (args.Length > 3 && args[^1] == "--extract-all")
         {
@@ -93,7 +101,7 @@ class Program
         return baseN.OpenFileSystemWithPatch(updN, NcaSectionType.Data, IntegrityCheckLevel.None);
     }
 
-    static void ExtractAll(string prodKeys, string titleKeys, string baseNca, string updNca, string destDir)
+    static KeySet LoadKeySet(string prodKeys, string titleKeys)
     {
         var keyset = KeySet.CreateDefaultKeySet();
         ExternalKeyReader.ReadKeyFile(keyset, prodKeys, null, null, null);
@@ -104,6 +112,37 @@ class Program
             keyset.ExternalKeySet.Add(new RightsId(Convert.FromHexString(parts[0])),
                                       new LibHac.Spl.AccessKey(Convert.FromHexString(parts[1])));
         }
+        return keyset;
+    }
+
+    /// 列出 RomFS 全部文件，或只解出路径含任一 needle 的文件（保持 RomFS 内的目录结构）
+    static void ListOrMatch(KeySet keyset, string baseNca, string updNca, string destDir, bool isList, string[] needles)
+    {
+        var baseN = new Nca(keyset, new LocalStorage(baseNca, FileAccess.Read));
+        IFileSystem romfs = OpenRomFs(keyset, baseN, updNca);
+        foreach (var entry in romfs.EnumerateEntries("/", "*", SearchOptions.RecurseSubdirectories))
+        {
+            if (entry.Type != DirectoryEntryType.File) continue;
+            if (isList)
+            {
+                Console.WriteLine($"{entry.Size}\t{entry.FullPath}");
+                continue;
+            }
+            if (!Array.Exists(needles, n => entry.FullPath.Contains(n, StringComparison.OrdinalIgnoreCase))) continue;
+            var file = new UniqueRef<IFile>();
+            romfs.OpenFile(ref file, entry.FullPath.ToU8Span(), OpenMode.Read).ThrowIfFailure();
+            string outPath = System.IO.Path.Combine(destDir, entry.FullPath.TrimStart('/'));
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outPath)!);
+            using var stream = file.Get.AsStream();
+            using var outF = File.Create(outPath);
+            stream.CopyTo(outF);
+            Console.WriteLine($"{entry.FullPath} -> {outF.Length}");
+        }
+    }
+
+    static void ExtractAll(string prodKeys, string titleKeys, string baseNca, string updNca, string destDir)
+    {
+        var keyset = LoadKeySet(prodKeys, titleKeys);
         using (var bs = new LocalStorage(baseNca, FileAccess.Read))
         {
             var baseN = new Nca(keyset, bs);
