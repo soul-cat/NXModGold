@@ -194,3 +194,33 @@ exefs 模块 + 一份共享 npdm，不改任何一方的代码：
 - 地图收集物恢复为完整构建（571 条）；Completionist Map 数据从 Thunderstore
   `Yoraiz0r/Completionist_Map/1.0.3` 重新获取，生成 `collectibles.gen.h`（gitignore）。
 - 实机 2026-10-24：皮肤 + HUD 共存，存档 1/4 正常，571 地图标记、主题血条均生效。
+
+### docs: README 瘦身与使用说明
+
+README 只保留用户要看的：效果图、功能、安装、操作、皮肤共存与文档索引；
+开发内容拆到独立文档，并补上实机截图与操作示意图。
+
+| 文件 | 说明 |
+|------|------|
+| `README.md` | 顶部 4 张实机效果图；功能表精简；新增「使用」一节 |
+| `docs/usage.md` | 完整使用说明：开关与 `config.ini`、九个纹章、BOSS 挑战、地图规则、存档导入导出、主题参数、日志与限制 |
+| `docs/development.md` | 架构、目录、构建、测试、地址换算、流水线（从 README 迁出） |
+| `docs/images/controls.svg` / `.png` | Switch 掌机操作示意图，线条标注 R3 / 方向键 / ZR / A·B |
+| `docs/images/shot-*.jpg` | 实机截图：皮肤主题、BOSS 条、选项页开关、BOSS 挑战列表 |
+| `HANDOFF.md` | 接手入口改为指向 `docs/development.md` |
+
+- 修正选项页行数表述：新增的是七行（原文一处写成「六行」）。
+- 起始纹章顺序与 `start_crest_model.hpp` 对齐：猎人、收割者、流浪者、野兽、女巫、建筑师、萨满、诅咒、无斗篷。
+
+### release: TOMOD 商店上架 HUD 与共存版皮肤
+
+| Mod | 操作 | 结果 |
+|---|---|---|
+| `1409` 丝之歌 血条与地图 HUD | 文件更新到 v1.0.9、改名、重写介绍、补 2 张截图 | 已上架，内部版本 2，文件 147,115 B |
+| `1661` 丝之歌 × 星见雅皮肤（HUD 共存版） | 新上架，`skin` 类型 | 已上架，内部版本 1，文件 179,740,213 B |
+
+- 商店包改成 TOMOD 原生结构：zip 根目录直接是 `exefs/`、`romfs/`、`exefs_patches/`，
+  由 TOMOD 自己包装到 `atmosphere/contents/<tid>/`；GitHub 发布包仍是手动解压用的 `atmosphere/` 结构。
+- 两个包的 `exefs/main.npdm` 逐字节相同（`7edba565…`，1612 B），TOMOD 走引用计数，顺序不限。
+- 皮肤作者标注：终焉苍龙（原皮肤）/ nice2cu093（Switch 移植、SilkRuntime）；介绍里写明只改容器布局。
+- HUD 的游戏版本从 `1.0.3` 修正为 `1.0.30000`，与商店其它 Mod 一致。

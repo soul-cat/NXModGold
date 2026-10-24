@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1150" height="820" viewBox="0 0 1150 820">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.44" r="0.8">
+      <stop offset="0" stop-color="#162823"/>
+      <stop offset="0.55" stop-color="#0B1512"/>
+      <stop offset="1" stop-color="#060A09"/>
+    </radialGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D1A16"/>
+      <stop offset="0.5" stop-color="#17332B"/>
+      <stop offset="1" stop-color="#0A1310"/>
+    </linearGradient>
+    <linearGradient id="joyL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8E3C36"/>
+      <stop offset="1" stop-color="#5C2723"/>
+    </linearGradient>
+    <linearGradient id="joyR" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C7C8C"/>
+      <stop offset="1" stop-color="#1B5360"/>
+    </linearGradient>
+    <linearGradient id="bodyFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141E1C"/>
+      <stop offset="1" stop-color="#0C1413"/>
+    </linearGradient>
+    <linearGradient id="barFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3FA8C8"/>
+      <stop offset="1" stop-color="#7FE0FA"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.45" r="0.74">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.5"/>
+    </radialGradient>
+    <clipPath id="screenClip">
+      <rect x="343" y="307" width="464" height="261" rx="4"/>
+    </clipPath>
+    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <rect width="1150" height="820" fill="url(#bg)"/>
+
+  <!-- 标题 -->
+  <text x="40" y="66" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+        font-size="29" font-weight="bold" fill="#ECE5D2" letter-spacing="3">操作示意</text>
+  <text x="40" y="94" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+        font-size="12" fill="#7F958E" letter-spacing="1">HOLLOW KNIGHT: SILKSONG · SILKSONGHUD</text>
+  <text x="1110" y="66" text-anchor="end" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+        font-size="13" fill="#7F958E">Nintendo Switch · 掌机模式</text>
+  <line x1="40" y1="112" x2="1110" y2="112" stroke="#2A3B36" stroke-width="1"/>
+
+  <!-- 机身投影 -->
+  <rect x="337" y="296" width="476" height="310" rx="22" fill="#000000" opacity="0.45" filter="url(#softGlow)"/>
+
+  <!-- 肩键 -->
+  <rect x="237" y="258" width="88" height="24" rx="7" fill="#1B2624" stroke="#B9B3A2" stroke-width="1.6"/>
+  <rect x="825" y="258" width="88" height="24" rx="7" fill="#1B2624" stroke="#B9B3A2" stroke-width="1.6"/>
+  <text x="281" y="274" text-anchor="middle" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+        font-size="9" fill="#8DA29B">ZL · L</text>
+  <text x="869" y="274" text-anchor="middle" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+        font-size="9" fill="#8DA29B">ZR · R</text>
+
+  <!-- 左右手柄 -->
+  <path d="M327 285 L300 285 Q235 285 235 352 L235 528 Q235 595 300 595 L327 595 Z"
+        fill="url(#joyL)" stroke="#E9E2CE" stroke-width="1.9"/>
+  <path d="M823 285 L850 285 Q915 285 915 352 L915 528 Q915 595 850 595 L823 595 Z"
+        fill="url(#joyR)" stroke="#E9E2CE" stroke-width="1.9"/>
+  <path d="M268 315 Q257 390 260 455" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="1.6" fill="none"/>
+  <path d="M882 315 Q893 390 890 455" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="1.6" fill="none"/>
+
+  <!-- 机身与屏幕 -->
+  <rect x="327" y="285" width="496" height="310" rx="14" fill="url(#bodyFill)" stroke="#E9E2CE" stroke-width="1.9"/>
+  <rect x="343" y="307" width="464" height="261" rx="4" fill="url(#screen)" stroke="#27403A" stroke-width="1.2"/>
+
+  <g clip-path="url(#screenClip)">
+    <circle cx="505" cy="440" r="150" fill="#1C3C32" opacity="0.55"/>
+    <circle cx="700" cy="380" r="110" fill="#19352C" opacity="0.45"/>
+    <ellipse cx="575" cy="540" rx="250" ry="60" fill="#050C0A" opacity="0.55"/>
+    <path d="M343 548 Q445 522 550 548 T807 540 L807 568 L343 568 Z" fill="#060D0B" opacity="0.7"/>
+    <path d="M343 410 Q408 378 447 422" stroke="#4E7A68" stroke-opacity="0.25" stroke-width="1.6" fill="none"/>
+    <path d="M690 350 Q742 325 785 365" stroke="#4E7A68" stroke-opacity="0.2" stroke-width="1.6" fill="none"/>
+
+    <!-- 地图收集物标记 -->
+    <g stroke="#E8C46A" stroke-opacity="0.5" stroke-width="1.2" fill="none">
+      <rect x="366" y="398" width="9" height="9" rx="1.5" transform="rotate(45 370.5 402.5)"/>
+      <rect x="402" y="448" width="9" height="9" rx="1.5" transform="rotate(45 406.5 452.5)"/>
+      <rect x="362" y="480" width="9" height="9" rx="1.5" transform="rotate(45 366.5 484.5)"/>
+    </g>
+
+    <!-- 小怪血条 + 伤害数字 -->
+    <circle cx="650" cy="361" r="10" stroke="#A9C4BA" stroke-opacity="0.35" stroke-width="1.2" fill="none"/>
+    <rect x="620" y="386" width="64" height="5" rx="2.5" fill="#07100E" stroke="#BFE6F2" stroke-opacity="0.3" stroke-width="0.8"/>
+    <rect x="620" y="386" width="38" height="5" rx="2.5" fill="url(#barFill)" opacity="0.9"/>
+    <text x="693" y="385" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+          font-size="10" font-weight="bold" fill="#FF6A7A">-12</text>
+
+    <!-- 游戏自己的 BOSS 大标题 -->
+    <text x="357" y="557" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+          font-size="17" fill="#EAE6D6" opacity="0.88">苔藓之母</text>
+
+    <!-- BOSS 血条 -->
+    <rect x="395" y="520" width="360" height="15" rx="7.5" fill="#07110F" fill-opacity="0.88"
+          stroke="#D8F4FF" stroke-opacity="0.45" stroke-width="1"/>
+    <rect x="395" y="520" width="223" height="15" rx="7.5" fill="url(#barFill)" opacity="0.85"/>
+    <rect x="401" y="521.5" width="211" height="1.2" rx="0.6" fill="#E8FAFF" opacity="0.55"/>
+    <text x="575" y="531" text-anchor="middle" font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif"
+          font-size="9" font-weight="bold" fill="#04171A">74 / 120</text>
+  </g>
+
+  <!-- 摇杆与按键 -->
+  <circle cx="281" cy="345" r="22" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.6"/>
+  <circle cx="281" cy="345" r="13" fill="#253230" stroke="#C7C0AE" stroke-width="1.1"/>
+
+  <circle cx="869" cy="500" r="22" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.6"/>
+  <circle cx="869" cy="500" r="13" fill="#253230" stroke="#C7C0AE" stroke-width="1.1"/>
+  <circle cx="869" cy="500" r="31" fill="none" stroke="#5FD0F2" stroke-opacity="0.65"
+          stroke-width="1.2" stroke-dasharray="3 6"/>
+
+  <!-- 十字键 -->
+  <polygon points="271,474 291,474 291,490 307,490 307,510 291,510 291,526 271,526 271,510 255,510 255,490 271,490"
+           fill="#1A2321" stroke="#E9E2CE" stroke-width="1.6"/>
+
+  <!-- ABXY -->
+  <g font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif" font-size="9" text-anchor="middle">
+    <circle cx="869" cy="324" r="8.5" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.3"/>
+    <text x="869" y="327" fill="#C7C0AE">X</text>
+    <circle cx="890" cy="345" r="8.5" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.3"/>
+    <text x="890" y="348" fill="#C7C0AE">A</text>
+    <circle cx="869" cy="366" r="8.5" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.3"/>
+    <text x="869" y="369" fill="#C7C0AE">B</text>
+    <circle cx="848" cy="345" r="8.5" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.3"/>
+    <text x="848" y="348" fill="#C7C0AE">Y</text>
+  </g>
+
+  <!-- 小按键 -->
+  <rect x="250" y="313" width="14" height="4.5" rx="2.2" fill="#2A3432" stroke="#B9B3A2" stroke-width="0.8"/>
+  <path d="M896 314 L906 314 M901 309 L901 319" stroke="#B9B3A2" stroke-width="1.6"/>
+  <circle cx="869" cy="557" r="9" fill="#1A2321" stroke="#E9E2CE" stroke-width="1.2"/>
+  <path d="M866 559 L866 555 L869 552 L872 555 L872 559 Z" fill="none" stroke="#C7C0AE" stroke-width="0.9"/>
+
+  <!-- 引线 -->
+  <g stroke="#8FA9A1" stroke-width="1.3" fill="none">
+    <polyline points="255,500 222,500"/>
+    <polyline points="914,270 929,270"/>
+    <polyline points="899,345 929,345"/>
+    <polyline points="893,500 929,500"/>
+  </g>
+  <g fill="#5FD0F2">
+    <circle cx="255" cy="500" r="7" opacity="0.18" filter="url(#softGlow)"/>
+    <circle cx="255" cy="500" r="3"/>
+    <circle cx="914" cy="270" r="7" opacity="0.18" filter="url(#softGlow)"/>
+    <circle cx="914" cy="270" r="3"/>
+    <circle cx="899" cy="345" r="7" opacity="0.18" filter="url(#softGlow)"/>
+    <circle cx="899" cy="345" r="3"/>
+    <circle cx="893" cy="500" r="7" opacity="0.18" filter="url(#softGlow)"/>
+    <circle cx="893" cy="500" r="3"/>
+  </g>
+
+  <!-- 左侧说明 -->
+  <g font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif" text-anchor="end">
+    <text x="205" y="386" font-size="24" font-weight="bold" fill="#E8C46A" letter-spacing="1">方向键</text>
+    <text x="205" y="414" font-size="16" fill="#9FB3AC">面板内切换</text>
+    <text x="205" y="442" font-size="16" fill="#D6DED9">↑ 小怪血条</text>
+    <text x="205" y="466" font-size="16" fill="#D6DED9">→ BOSS 血条</text>
+    <text x="205" y="490" font-size="16" fill="#D6DED9">↓ 伤害数字</text>
+    <text x="205" y="514" font-size="16" fill="#D6DED9">← 地图收集物</text>
+  </g>
+
+  <!-- 右侧说明 -->
+  <g font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif">
+    <text x="938" y="238" font-size="24" font-weight="bold" fill="#E8C46A" letter-spacing="1">ZR</text>
+    <text x="938" y="268" font-size="17" fill="#D6DED9">打开 BOSS 挑战</text>
+    <text x="938" y="292" font-size="14" fill="#7F958E">按住 R3 时按 ZR</text>
+
+    <text x="938" y="330" font-size="24" font-weight="bold" fill="#E8C46A" letter-spacing="1">A / B</text>
+    <text x="938" y="360" font-size="17" fill="#D6DED9">进入 / 关闭</text>
+    <text x="938" y="384" font-size="14" fill="#7F958E">上下选 · 左右换幕</text>
+
+    <text x="938" y="466" font-size="24" font-weight="bold" fill="#E8C46A" letter-spacing="1">R3</text>
+    <text x="938" y="496" font-size="17" fill="#D6DED9">按住：弹出血条面板</text>
+    <text x="938" y="520" font-size="14" fill="#7F958E">方向键切换 · 松开保存</text>
+  </g>
+
+  <!-- 底部提示 -->
+  <line x1="40" y1="700" x2="1110" y2="700" stroke="#2A3B36" stroke-width="1"/>
+  <g font-family="Hiragino Sans GB, PingFang SC, Noto Sans SC, sans-serif" font-size="13">
+    <text x="40" y="735" fill="#9FB3AC">「选项 → 游戏」页末尾也能切换；设置保存在
+      <tspan fill="#D6DED9">SD:/config/sshud/config.ini</tspan>，可手动编辑。</text>
+    <text x="1110" y="735" text-anchor="end" fill="#7F958E">Pro 手柄按键位置相同</text>
+    <text x="40" y="763" fill="#7F958E">按住 R3 时面板常驻，松开即保存；平时不拦截任何操作。</text>
+  </g>
+
+  <rect width="1150" height="820" fill="url(#vignette)"/>
+</svg>
