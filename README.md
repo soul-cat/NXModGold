@@ -132,7 +132,15 @@ make -C exl
 打包发布用的 zip（解压到 SD 根目录或交给 NX-Mod-Manager 均可，作者 cool）：
 
 ```bash
-./tools/70-package-release.sh 1.0.0   # → work/release/SilksongHUD-v1.0.0.zip
+./tools/70-package-release.sh 1.0.8   # → work/release/SilksongHUD-v1.0.8.zip
+```
+
+皮肤共存包（需要原始皮肤包与 union npdm）：
+
+```bash
+./tools/40-patch-npdm.py patch --in work/dump/ExeFS/main.npdm --out work/release/main.npdm
+./tools/85-repack-skin-coexist.py --skin-zip <原始皮肤包.zip> \
+    --npdm work/release/main.npdm --out work/release/SilksongSkin-coexist.zip
 ```
 
 面板文字要改时才需要重渲染（需要 Pillow 与 Noto Sans SC Bold，SIL OFL）：
@@ -206,6 +214,24 @@ Ryujinx：右键游戏 →「打开 Atmosphere Mods 目录」，放到 `<该目�
   黑寡妇、初罪者、回忆 BOSS、三叶草舞者打完会自动切场景——都只影响内存。
 - BOSS 表来自场景资源包：`tools/80-scan-boss-scenes.py`（列出场景检查的标记、入口门、持久标记及其在存档里的值）、
   `tools/81-dump-fsm.py`（解出 PlayMaker 状态机）。资源包用 `tools/ncaext … --match <路径>` 解到 `work/bundles/`。
+
+### 与皮肤 Mod 共存
+
+皮肤 Mod（SilkModLoader）同样占用 `exefs/subsdk9` + `main.npdm`，原始包不能和本 Mod
+直接共存。发布包里的 `SilksongSkin-coexist.zip` 只改了容器布局：
+
+| 文件 | 说明 |
+|---|---|
+| `exefs/subsdk8` | 皮肤运行时（原包的 `subsdk9` 改名；必须排在 HUD 前） |
+| `exefs/subsdk9` | 本 HUD |
+| `exefs/main.npdm` | 两个包**逐字节相同**的 union npdm（59 个 SVC，fs 全开） |
+| `romfs/SilkModLoader/...` | 皮肤资源，原样 |
+| `exefs_patches/SilkModLoader/*.ips` | 皮肤 IPS，原样（目标基址仍是 `main + 0x8A3A000`） |
+
+TOMOD 的规则是「同路径 + 不同内容才冲突」，所以两个包的 `main.npdm` 内容相同时会走
+引用计数共享；**先装 HUD 再装皮肤，或反过来，都可以**。不要再用商店里的原始皮肤包，
+也不要让皮肤 Mod 自动更新。重新打包用 `tools/85-repack-skin-coexist.py`，原理与实机
+验证记录见 `docs/coexist-skin.md`。
 
 ### 存档导出
 

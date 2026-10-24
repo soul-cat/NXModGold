@@ -45,6 +45,12 @@ $MOD_NAME v$VERSION —— 空洞骑士：丝之歌（Switch）血条与地图�
     重新读档即恢复原样。建议在 4 号位放一个 100% 完成度的存档
     设置保存在 SD:/config/sshud/config.ini，日志在 SD:/config/sshud/log.txt
 
+与皮肤 Mod 共存
+  - 皮肤包（SilkModLoader）请用 release 里的 SilksongSkin-coexist.zip：
+    皮肤模块改名为 exefs/subsdk8，与本 Mod 的 subsdk9 并存，两个包共用同一份 main.npdm。
+  - TOMOD 里先装本 Mod 再装皮肤，或先装皮肤再装本 Mod，都可以。
+  - 不要再用商店里的原始皮肤包，也不要让皮肤 Mod 自动更新。
+
 要求
   - 大气层（Atmosphère）
   - 游戏版本 v1.0.3（1.0.30000）。其它版本 mod 会自动不生效。

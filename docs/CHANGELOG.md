@@ -149,3 +149,31 @@ objdump TakeDamageHook::Callback      → x0/x1/x2 保存后原样尾调 Orig
 
 **未决**：模拟器下载源 `update.ryujinx.app` / `git.ryujinx.app`（91.239.78.255）
 2026-09-24 全球超时，待恢复。
+
+---
+
+## 2026-10-24
+
+### feat(exl): 与 SilkModLoader 皮肤 Mod 共存（v1.0.8）
+
+皮肤 Mod 和 HUD 原先抢同一个 `exefs/subsdk9` + `main.npdm`。现在改成两个
+exefs 模块 + 一份共享 npdm，不改任何一方的代码：
+
+| 改动 | 说明 |
+|------|------|
+| `exefs/subsdk8` | 皮肤运行时（原包 `subsdk9` 改名，必须排在 HUD 前） |
+| `exefs/subsdk9` | SilksongHUD，保持不变 |
+| `main.npdm` | union：原版 + 9 个 SVC（含皮肤需要的 `0x4B/0x4C/0x73/0x77/0x78`）+ fs 全开；两个包逐字节相同 |
+| 皮肤 IPS | 原样使用；实机确认 `SilkModLoader - main = 0x8A3A000`，与 IPS 常量一致 |
+
+- `tools/40-patch-npdm.py`：`REQUIRED_SVCS` 增加 5 个 code-memory SVC，生成 union npdm。
+- `exl/program/main.cpp`：启动时打印 rtld 模块表，便于以后确认皮肤模块基址。
+- `tools/85-repack-skin-coexist.py`：只改容器布局（subsdk9→subsdk8、替换 main.npdm），
+  保留原始皮肤资源与 IPS。
+- `docs/coexist-skin.md`：布局、TOMOD 冲突规则、实机验证记录、版权说明。
+- 修正 `work/` 里的 v1.0.3 metadata（17,153,796 字节）并重新生成 offsets；
+  `SpriteRenderer.set_sprite=0x5F3F650` 等已知值与 SilkRuntime 一致。
+
+**实机验证**（v1.0.3，Build ID `FC9EA4CCC955D579`）：模块表
+`main=0x930a06000`、`SilkModLoader=0x939440000`、`sshud=0x93a089000`；
+`map hooks installed: 571 collectibles`；存档 1 与 4 均正常，皮肤与 HUD 同时生效。

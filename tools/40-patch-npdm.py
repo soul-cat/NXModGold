@@ -48,9 +48,16 @@ REQUIRED_SVCS: dict[int, str] = {
     0x29: "svcGetInfo",
     0x40: "svcCreateSession",
     0x43: "svcReplyAndReceive",
+    0x4B: "svcCreateCodeMemory",
+    0x4C: "svcControlCodeMemory",
+    0x73: "svcSetProcessMemoryPermission",
     0x74: "svcMapProcessMemory",
     0x75: "svcUnmapProcessMemory",
+    0x77: "svcMapProcessCodeMemory",
+    0x78: "svcUnmapProcessCodeMemory",
 }
+# 0x4B/0x4C/0x73/0x77/0x78 是 SilkModLoader（皮肤运行时）需要、我们原版补丁没有的；
+# 加进来后这份 npdm 同时满足 HUD 与皮肤两个 exefs 模块（两个 Mod 共用同一份 npdm）。
 
 META_SIZE = 0x80
 ACID_SIG_SIZE = 0x100

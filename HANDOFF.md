@@ -51,6 +51,24 @@
 
 ---
 
+## 与皮肤 Mod（SilkModLoader）共存
+
+皮肤 Mod 和本 Mod 都通过 exefs 注入，原始包会抢同一个 `subsdk9` 和 `main.npdm`。
+共存布局：
+
+- 皮肤运行时的 `exefs/subsdk9` 改名为 **`subsdk8`**（必须排在 HUD 前）；
+- HUD 保持 **`subsdk9`**；
+- 两个包共用一份 **union npdm**（原版 + 9 个 SVC + fs 全开），且必须**逐字节相同**；
+- 皮肤 IPS 原样使用：实机 `SilkModLoader - main = 0x8A3A000`，与 IPS 写死的常量一致，
+  所以不要重算；如果把 HUD 放到皮肤前面，皮肤基址后移，IPS 会跳错地址。
+
+TOMOD 的规则是「同路径 + 不同内容才冲突，内容相同走引用计数」，所以两个包的
+`main.npdm` 相同、其余文件不重叠时，**先装 HUD 或先装皮肤都可以**。
+细节、脚本与验证记录：`docs/coexist-skin.md`、`tools/85-repack-skin-coexist.py`。
+不要用商店里的原始皮肤包，也不要让皮肤 Mod 自动更新。
+
+---
+
 ## 流水线（游戏更新后重跑）
 
 ```bash
@@ -91,6 +109,9 @@ make -C exl
    地图的 `IconSet` 含托管指针，必须放栈上。
 5. **IMGUI 全局状态进出还原。** `ImguiStateGuard` 保存 / 还原 `GUI.color`、`contentColor`、label 字号与对齐，不影响游戏自己的 OnGUI。
 6. **测试红了先怀疑代码，不要改测试。**
+7. **皮肤模块必须排在 `subsdk8`，HUD 在 `subsdk9`。** 皮肤 IPS 的目标地址是
+   `main + 0x8A3A000 + hook_offset`；换序或改模块名之前先读 `docs/coexist-skin.md`，
+   并用实机日志里的模块表确认基址差。两个包的 `main.npdm` 必须逐字节相同。
 
 ---
 

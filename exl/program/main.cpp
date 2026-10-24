@@ -80,6 +80,26 @@ bool verifyBuildId() {
 
 }  // namespace
 
+// 打印 rtld 的模块表。皮肤 Mod 的预启动 IPS 把游戏调用点写死跳到
+// main + 0x8A3A000 + hook_offset；两个 exefs 模块共存时用它确认皮肤模块
+// 仍然落在原来的地址上。日志先进内存缓冲，首个 LateUpdate 挂上 SD 卡后落盘。
+void logModuleLayout() {
+  using exl::util::ModuleIndex;
+  for (int i = static_cast<int>(ModuleIndex::Start); i < static_cast<int>(ModuleIndex::End); ++i) {
+    const auto index = static_cast<ModuleIndex>(i);
+    if (!exl::util::HasModule(index)) continue;
+    const auto& module = exl::util::GetModuleInfo(index);
+    const auto name = module.GetModuleName();
+    Logging.Log("[sshud] module idx=%d base=0x%lx text=0x%lx/%lu rodata=0x%lx data=0x%lx name=%.*s",
+                i, static_cast<unsigned long>(module.m_Total.m_Start),
+                static_cast<unsigned long>(module.m_Text.m_Start),
+                static_cast<unsigned long>(module.m_Text.m_Size),
+                static_cast<unsigned long>(module.m_Rodata.m_Start),
+                static_cast<unsigned long>(module.m_Data.m_Start),
+                static_cast<int>(name.size()), name.data());
+  }
+}
+
 extern "C" void exl_main(void* x0, void* x1) {
   (void)x0;
   (void)x1;
@@ -89,6 +109,7 @@ extern "C" void exl_main(void* x0, void* x1) {
   Logging.Log("[sshud] loaded, main @ 0x%lx (.text 0x%lx bytes)", mainModule.m_Total.m_Start,
               mainModule.m_Text.m_Size);
   if (!verifyBuildId()) return;
+  logModuleLayout();
 
   sshud::hud::installHooks();
   sshud::map::installHooks();
