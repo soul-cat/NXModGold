@@ -18,7 +18,8 @@
 |---|---|---|
 | 敌人血条 | 受玩家伤害的敌人头顶显示血条与 `hp/maxHp`，最后一次掉血 1.5 秒后隐藏 | `Silksong_HealthBar` |
 | 伤害数字 | 受击处飘出红色 `-伤害`，2 秒内上升并淡出 | 同上 |
-| BOSS 血条 | 最大血量 > 105 的敌人改画屏幕底部居中的 BOSS 条（带猎人日志名字），多个 BOSS 向上堆叠；BOSS 大标题出现（`DisplayBossTitle`）时就登记，不等第一刀；不按时间隐藏，死亡 / 离开场景才消失（血量归零或暂时停用只是先不画）。FSM 用 SetHP 设的占位大数（> 3000）不计入上限；按段加血的 BOSS（苍白之母：FSM `Phase Control` 的 `P1 HP`…`P6 HP`，打空一段 `AddHP` 下一段）读出段表，显示整场一条：当前血量 + 后面各段。HUD 文字（BOSS 名 / 数字 / 菜单）用游戏自带的中文字体 `NotoSerifCJKsc-Regular`（`Resources.FindObjectsOfTypeAll(Font)` 按名找到，画时设成 IMGUI 默认字体），简体字不缺字形。外框与填充是作者自绘贴图 `exl/assets/boss_frame.png` / `boss_fill.png` | 同上 |
+| BOSS 血条 | 最大血量 > 105 的敌人改画屏幕底部居中的 BOSS 条，多个 BOSS 向上堆叠；BOSS 大标题出现（`DisplayBossTitle`）时就登记，不等第一刀；不按时间隐藏，死亡 / 离开场景才消失（血量归零或暂时停用只是先不画）。FSM 用 SetHP 设的占位大数（> 3000）不计入上限；按段加血的 BOSS（苍白之母：FSM `Phase Control` 的 `P1 HP`…`P6 HP`，打空一段 `AddHP` 下一段）读出段表，显示整场一条：当前血量 + 后面各段。条上方不再重复画 BOSS 名（游戏自己的大标题保留）；HUD 文字（数字 / 菜单）用游戏自带的中文字体 `NotoSerifCJKsc-Regular`（`Resources.FindObjectsOfTypeAll(Font)` 按名找到，画时设成 IMGUI 默认字体），简体字不缺字形。外框与填充是作者自绘贴图 `exl/assets/boss_frame.png` / `boss_fill.png` | 同上 |
+| 皮肤主题 | 检测到 SilkModLoader 时自动切换血条配色（青蓝填充 / 暗青底 / 淡青外框 / 低血量暗红），血量 65%→35% 平滑过渡，填充顶部 1px 高光；没有皮肤时保持原配色 | — |
 | 地图收集物标注 | 571 个收集物（18 类）在快速地图与大地图上用游戏自带图标标出；区域地图没买、房间没绘制、已收集的都不显示；已向跳蚤商队猎人买了原生跳蚤图钉的区域，跳蚤交给游戏自己标，不重复画 | `Completionist Map` |
 | 游戏内开关面板 | 按住 R3 弹出中文面板，按住期间方向键切换功能，设置存 SD 卡 | — |
 | 原生选项页开关 | 「选项 → 游戏」页末尾多出七行，外观、字体、手柄导航与原生选项一致，与 R3 面板共用设置；行多时自动压行距并等比缩小整页，保证都在屏幕内 | — |
@@ -132,7 +133,7 @@ make -C exl
 打包发布用的 zip（解压到 SD 根目录或交给 NX-Mod-Manager 均可，作者 cool）：
 
 ```bash
-./tools/70-package-release.sh 1.0.8   # → work/release/SilksongHUD-v1.0.8.zip
+./tools/70-package-release.sh 1.0.9   # → work/release/SilksongHUD-v1.0.9.zip
 ```
 
 皮肤共存包（需要原始皮肤包与 union npdm）：
@@ -232,6 +233,17 @@ TOMOD 的规则是「同路径 + 不同内容才冲突」，所以两个包的 `
 引用计数共享；**先装 HUD 再装皮肤，或反过来，都可以**。不要再用商店里的原始皮肤包，
 也不要让皮肤 Mod 自动更新。重新打包用 `tools/85-repack-skin-coexist.py`，原理与实机
 验证记录见 `docs/coexist-skin.md`。
+
+### 皮肤主题
+
+启动时扫 rtld 模块表；检测到 `SilkModLoader` 就把血条切到皮肤配色，没有皮肤时保持原配色。
+日志会写 `[sshud] bar theme: skin` 或 `default`。调色板与低血量过渡参数都在
+`exl/program/hud_theme_model.hpp`：
+
+- 填充青蓝 `#55C8F0`，背景暗青 `#0A1418`，BOSS 外框淡青 `#D8F4FF`；
+- 血量从 65% 降到 35% 时，填充和数字用 smoothstep 平滑过渡到暗红 `#C03050`；
+- 填充顶部 1px 高光；
+- BOSS 条上方不再重复画名字，游戏自己的左下角大标题不受影响。
 
 ### 存档导出
 

@@ -16,6 +16,7 @@
 #include "lib.hpp"
 #include "offsets.h"
 #include "hud_hooks.hpp"
+#include "hud_theme.hpp"
 #include "map_markers.hpp"
 #include "delivery_guard.hpp"
 #include "options_menu.hpp"
@@ -110,6 +111,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               mainModule.m_Text.m_Size);
   if (!verifyBuildId()) return;
   logModuleLayout();
+  // 用来确认实机加载的确实是带主题的这一版（排查/更新时看日志即可）。
+  Logging.Log("[sshud] hud build: theme-v3 (smooth low-hp, no bar name)");
+  sshud::hud::selectThemeAtStartup();
 
   sshud::hud::installHooks();
   sshud::map::installHooks();

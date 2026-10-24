@@ -15,6 +15,7 @@
 #include "hud_frame.hpp"
 #include "hud_model.hpp"
 #include "hud_text_cache.hpp"
+#include "hud_theme_model.hpp"
 #include "menu_textures.hpp"
 #include "toggles_model.hpp"
 #include "unity_api.hpp"
@@ -23,22 +24,25 @@
 
 namespace sshud::hud {
 
-// ---------------------------------------------------------------- 颜色（PC 默认）
-constexpr ui::Color COLOR_BAR_FILL{0xBE / 255.0f, 0xB8 / 255.0f, 0xB8 / 255.0f, 1.0f};
-constexpr ui::Color COLOR_ENEMY_BG{0.0f, 0.0f, 0.0f, 0x85 / 255.0f};
-constexpr ui::Color COLOR_BOSS_BG{0.0f, 0.0f, 0.0f, 0x80 / 255.0f};
-constexpr ui::Color COLOR_TEXT_DARK{0x0E / 255.0f, 0x04 / 255.0f, 0x04 / 255.0f, 1.0f};
-constexpr ui::Color COLOR_TEXT_WHITE{1.0f, 1.0f, 1.0f, 1.0f};
-constexpr ui::Color COLOR_BOSS_FRAME{1.0f, 1.0f, 1.0f, 0.95f};
-constexpr ui::Color COLOR_DAMAGE{0xDC / 255.0f, 0x14 / 255.0f, 0x3C / 255.0f, 1.0f};
-constexpr ui::Color COLOR_MENU_BG{0.0f, 0.0f, 0.0f, 0.7f};
-constexpr ui::Color COLOR_MENU_ON{0.55f, 0.9f, 0.55f, 1.0f};
-constexpr ui::Color COLOR_MENU_OFF{0.6f, 0.6f, 0.6f, 1.0f};
+// ---------------------------------------------------------------- 颜色（默认 / 皮肤主题）
+inline ui::Color toUi(const ThemeColor& color) {
+  return {color.r, color.g, color.b, color.a};
+}
+
+/// 血量从 55% 到 30% 平滑过渡到低血量色（默认主题两者相同，不产生变化）。
+inline ui::Color barFillColor(float ratio) {
+  const BarTheme& theme = activeTheme();
+  return toUi(blend(theme.fill, theme.lowHpFill, lowHealthBlend(ratio)));
+}
+
+/// 血量数字/文字同样平滑过渡：高血量用暗色，低血量用亮色。
+inline ui::Color healthTextColor(float ratio) {
+  const BarTheme& theme = activeTheme();
+  return toUi(blend(theme.textDark, theme.textLight, lowHealthBlend(ratio)));
+}
 
 // ---------------------------------------------------------------- 字号（参考分辨率像素 / 世界单位）
-constexpr float BOSS_NAME_FONT = 28.0f;
 constexpr float BOSS_NUMBERS_FONT = 24.0f;
-constexpr float BOSS_NAME_GAP = 28.0f;
 constexpr float ENEMY_NUMBERS_FONT_UNITS = 0.32f;
 constexpr float ENEMY_NUMBERS_GAP_UNITS = 0.3f;
 constexpr float DAMAGE_FONT_UNITS = 0.55f;
@@ -54,22 +58,34 @@ constexpr float MENU_PADDING = 16.0f;
 constexpr float MENU_STATE_GAP = 40.0f;    // 功能名与 开/关 之间的最小间距
 
 inline void drawBar(const Frame& frame, const Rect& bar, float ratio, ui::Color background) {
+  const BarTheme& theme = activeTheme();
   ui::setGuiColor(background);
   ui::drawTexture(toUi(bar), frame.white);
-  ui::setGuiColor(COLOR_BAR_FILL);
-  ui::drawTexture(toUi(fillRect(bar, ratio, BAR_FILL_INSET)), frame.white);
-  ui::setGuiColor(COLOR_TEXT_WHITE);
+  const Rect fill = fillRect(bar, ratio, BAR_FILL_INSET);
+  ui::setGuiColor(barFillColor(ratio));
+  ui::drawTexture(toUi(fill), frame.white);
+  if (fill.width > 0.0f && theme.highlight.a > 0.0f) {
+    ui::setGuiColor(toUi(theme.highlight));
+    ui::drawTexture(toUi(Rect{fill.x, fill.y, fill.width, 1.0f}), frame.white);
+  }
+  ui::setGuiColor(toUi(theme.textLight));
 }
 
 /// 外框 → 暗色空槽 → 按比例的填充（填充右端尖角跟着血量走）
-inline void drawTexturedBossBar(const Rect& bar, float ratio, const BossBarTextures& textures) {
-  drawSliced(textures.frame, bar, COLOR_BOSS_FRAME);
+inline void drawTexturedBossBar(const Frame& frame, const Rect& bar, float ratio,
+                                const BossBarTextures& textures) {
+  const BarTheme& theme = activeTheme();
+  drawSliced(textures.frame, bar, toUi(theme.bossFrame));
   const float insetX = bar.height * BOSS_FILL_INSET_X_RATIO;
   const float insetY = bar.height * BOSS_FILL_INSET_Y_RATIO;
   const Rect track{bar.x + insetX, bar.y + insetY, bar.width - 2.0f * insetX, bar.height - 2.0f * insetY};
-  drawSliced(textures.fill, track, COLOR_BOSS_BG);
-  drawSliced(textures.fill, {track.x, track.y, track.width * ratio, track.height}, COLOR_BAR_FILL);
-  ui::setGuiColor(COLOR_TEXT_WHITE);
+  drawSliced(textures.fill, track, toUi(theme.bossBg));
+  drawSliced(textures.fill, {track.x, track.y, track.width * ratio, track.height}, barFillColor(ratio));
+  if (ratio > 0.0f && theme.highlight.a > 0.0f) {
+    ui::setGuiColor(toUi(theme.highlight));
+    ui::drawTexture(toUi(Rect{track.x, track.y, track.width * ratio, 1.0f}), frame.white);
+  }
+  ui::setGuiColor(toUi(theme.textLight));
 }
 
 /// 一个要画的敌人：模型槽位下标（文字缓存按它索引）+ 本帧要显示的血量与上限
@@ -84,16 +100,16 @@ inline void drawBoss(const Frame& frame, const LiveEnemy& live, int index) {
   const float scale = uiScale(frame.width, frame.height);
   const float centerX = bar.x + bar.width * 0.5f;
   const float ratio = healthRatio(live.view.hp, live.view.maxHp);
+  const BarTheme& theme = activeTheme();
   if (const BossBarTextures* textures = bossBarTextures(frame.now)) {
-    drawTexturedBossBar(bar, ratio, *textures);
+    drawTexturedBossBar(frame, bar, ratio, *textures);
   } else {
-    drawBar(frame, bar, ratio, COLOR_BOSS_BG);  // 贴图建不出来时退回纯色条
+    drawBar(frame, bar, ratio, toUi(theme.bossBg));  // 贴图建不出来时退回纯色条
   }
-  const ui::Color numbersColor = ratio < LOW_HEALTH_RATIO ? COLOR_TEXT_WHITE : COLOR_TEXT_DARK;
+  const ui::Color numbersColor = healthTextColor(ratio);
   drawText(frame, centerX, bar.y + bar.height * 0.5f, BOSS_NUMBERS_FONT * scale,
            healthTextFor(live.slot, live.view.hp, live.view.maxHp), numbersColor);
-  drawText(frame, centerX, bar.y - BOSS_NAME_GAP * scale, BOSS_NAME_FONT * scale,
-           bossNameFor(live.slot, live.enemy.manager), COLOR_TEXT_WHITE);
+  // 不再在条上方重复画 BOSS 名：游戏自己的 DisplayBossTitle 大标题已经显示。
 }
 
 inline void drawEnemy(const Frame& frame, const LiveEnemy& live) {
@@ -105,11 +121,11 @@ inline void drawEnemy(const Frame& frame, const LiveEnemy& live) {
   const float ppu = pixelsPerUnit(frame, anchor, x);
   if (ppu <= 0.0f) return;
   const float ratio = healthRatio(live.view.hp, live.view.maxHp);
+  const BarTheme& theme = activeTheme();
   const Rect bar = enemyBarRect(x, y, ppu);
-  drawBar(frame, bar, ratio, COLOR_ENEMY_BG);
-  const ui::Color textColor = ratio < LOW_HEALTH_RATIO ? COLOR_TEXT_WHITE : COLOR_TEXT_DARK;
+  drawBar(frame, bar, ratio, toUi(theme.enemyBg));
   drawText(frame, x, bar.y - ENEMY_NUMBERS_GAP_UNITS * ppu, ENEMY_NUMBERS_FONT_UNITS * ppu,
-           healthTextFor(live.slot, live.view.hp, live.view.maxHp), textColor);
+           healthTextFor(live.slot, live.view.hp, live.view.maxHp), healthTextColor(ratio));
 }
 
 inline void drawPopup(const Frame& frame, const Popup& popup, int slot) {
@@ -120,7 +136,7 @@ inline void drawPopup(const Frame& frame, const Popup& popup, int slot) {
   if (!project(frame, world, x, y)) return;
   const float ppu = pixelsPerUnit(frame, world, x);
   if (ppu <= 0.0f) return;
-  ui::Color color = COLOR_DAMAGE;
+  ui::Color color = toUi(activeTheme().damage);
   color.a = 1.0f - progress;
   drawText(frame, x, y, DAMAGE_FONT_UNITS * ppu, damageTextFor(slot, popup.damage), color);
 }
@@ -196,8 +212,11 @@ inline float menuContentWidth(const MenuTextures& textures) {
 inline void drawMenuRow(const MenuTextures& textures, size_t index, bool isEnabled, const Rect& line) {
   const TextImage& state = isEnabled ? textures.on : textures.off;
   const float stateWidth = state.width * line.height / MENU_TEXT_SOURCE_HEIGHT;
-  drawTextImage(textures.rows[index], line.x, line.y, line.height, isEnabled ? COLOR_TEXT_WHITE : COLOR_MENU_OFF);
-  drawTextImage(state, line.x + line.width - stateWidth, line.y, line.height, isEnabled ? COLOR_MENU_ON : COLOR_MENU_OFF);
+  const BarTheme& theme = activeTheme();
+  drawTextImage(textures.rows[index], line.x, line.y, line.height,
+                toUi(isEnabled ? theme.textLight : theme.menuOff));
+  drawTextImage(state, line.x + line.width - stateWidth, line.y, line.height,
+                toUi(isEnabled ? theme.menuOn : theme.menuOff));
 }
 
 /// 开关面板：半透明底框 + 标题 + 每个功能一行（中文文字是预渲染贴图）
@@ -211,17 +230,18 @@ inline void drawMenu(const Frame& frame, const toggles::Settings& settings, bool
   const float contentWidth = menuContentWidth(*textures) * scale;
   const float boxX = (frame.width - contentWidth) * 0.5f - padding;
   const float lineCount = static_cast<float>(toggles::PANEL_FEATURE_COUNT + 1);  // 标题 + 每个功能一行
-  ui::setGuiColor(COLOR_MENU_BG);
+  const BarTheme& theme = activeTheme();
+  ui::setGuiColor(toUi(theme.menuBg));
   ui::drawTexture({boxX, MENU_TOP * scale, contentWidth + 2.0f * padding, lineHeight * lineCount + 2.0f * padding},
                   frame.white);
   Rect line{boxX + padding, MENU_TOP * scale + padding + (lineHeight - MENU_TEXT_HEIGHT * scale) * 0.5f, contentWidth,
             MENU_TEXT_HEIGHT * scale};
-  drawTextImage(textures->title, line.x, line.y, line.height, COLOR_TEXT_WHITE);
+  drawTextImage(textures->title, line.x, line.y, line.height, toUi(theme.textLight));
   for (size_t i = 0; i < toggles::PANEL_FEATURE_COUNT; ++i) {
     line.y += lineHeight;
     drawMenuRow(*textures, i, settings.enabled[i], line);
   }
-  ui::setGuiColor(COLOR_TEXT_WHITE);
+  ui::setGuiColor(toUi(theme.textLight));
 }
 
 /// OnGUI 入口：每个 IMGUI 事件都会调用，只在 Repaint 时画

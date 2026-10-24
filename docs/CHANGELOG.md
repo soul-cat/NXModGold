@@ -177,3 +177,20 @@ exefs 模块 + 一份共享 npdm，不改任何一方的代码：
 **实机验证**（v1.0.3，Build ID `FC9EA4CCC955D579`）：模块表
 `main=0x930a06000`、`SilkModLoader=0x939440000`、`sshud=0x93a089000`；
 `map hooks installed: 571 collectibles`；存档 1 与 4 均正常，皮肤与 HUD 同时生效。
+
+### feat(hud): 皮肤主题（v1.0.9）
+
+检测到 SilkModLoader 时，血条自动切换到皮肤配色；没有皮肤时保持原配色。
+
+| 文件 | 说明 |
+|------|------|
+| `exl/program/hud_theme_model.hpp` | 默认/皮肤两套调色板；65%→35% smoothstep 低血量过渡；`bossText` 预留 |
+| `exl/program/hud_theme.hpp` | 扫 rtld 模块表找 `SilkModLoader`，拿不到名字时用 `Subsdk1 != 自己` 兜底 |
+| `exl/program/hud_draw.hpp` | 血条/数字/伤害/菜单颜色全部走 `activeTheme()`；填充顶部 1px 高光；删除条上方重复的 BOSS 名 |
+| `tests/test_hud_theme.cpp` | 主题选择、调色板、低血量过渡与颜色混合 |
+
+- 皮肤配色：青蓝填充 `#55C8F0`、暗青底 `#0A1418`、淡青外框 `#D8F4FF`、低血量暗红 `#C03050`、伤害 `#FF4A6A`。
+- 启动日志：`bar theme: skin|default`；构建标记 `hud build: theme-v3`。
+- 地图收集物恢复为完整构建（571 条）；Completionist Map 数据从 Thunderstore
+  `Yoraiz0r/Completionist_Map/1.0.3` 重新获取，生成 `collectibles.gen.h`（gitignore）。
+- 实机 2026-10-24：皮肤 + HUD 共存，存档 1/4 正常，571 地图标记、主题血条均生效。

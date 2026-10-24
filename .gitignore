@@ -57,6 +57,7 @@ exl/deploy/
 exl/program/offsets.h
 exl/program/collectibles.gen.h
 tests/test_hud_model
+tests/test_hud_theme
 tests/test_toggles
 tests/test_map_timing
 tests/test_map_refresh_plan

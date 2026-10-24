@@ -33,6 +33,8 @@
 
 | BOSS 挑战（4 号位） | 苔藓之母、碎裂者修女、骷髅暴君、加蒙德与扎扎、机枢舞者实机开打；战斗中途切换不卡死（传送前后 `TimeManager.Reset`）；4 号位存档写入全部拦下，`user4.dat` 多轮测试前后哈希不变 |
 
+| 皮肤主题 + 共存 | 皮肤 `subsdk8` + HUD `subsdk9` + 共享 union npdm；检测到 SilkModLoader 自动切青蓝配色（65%→35% 平滑低血量、1px 高光），条上方重复名字已删；实机 2026-10-24 存档 1/4 正常，571 地图标记恢复 |
+
 ### 待实机确认
 
 - **BOSS 条贴图外观**（`1760685`）：外框 / 填充贴图的比例、内缩量（`BOSS_FILL_INSET_X_RATIO` / `_Y_RATIO`）和尖角效果还没在实机上看过。
@@ -66,6 +68,21 @@ TOMOD 的规则是「同路径 + 不同内容才冲突，内容相同走引用�
 `main.npdm` 相同、其余文件不重叠时，**先装 HUD 或先装皮肤都可以**。
 细节、脚本与验证记录：`docs/coexist-skin.md`、`tools/85-repack-skin-coexist.py`。
 不要用商店里的原始皮肤包，也不要让皮肤 Mod 自动更新。
+
+### 皮肤主题实现
+
+- `hud_theme_model.hpp`：默认/皮肤两套调色板；`LOW_HEALTH_FADE_START = 0.65`、
+  `LOW_HEALTH_FADE_END = 0.35`，`lowHealthBlend()` 用 smoothstep；`bossText` 预留给
+  以后给游戏自己的大标题染色（当前条上方的名字已删）。
+- `hud_theme.hpp`：`hasSkinLoaderModule()` 扫模块名，拿不到名字时用
+  「`Subsdk1` 不是自己」兜底；`selectThemeAtStartup()` 在 `exl_main` 调用，日志
+  `[sshud] bar theme: skin|default`。
+- `hud_draw.hpp`：血条/数字/伤害/菜单颜色都走 `activeTheme()`；填充顶部 1px 高光；
+  不再在 BOSS 条上方画名字。
+- 构建标记 `hud build: theme-v3`，用来确认实机加载的是带主题的版本。
+- 完整构建需要 `work/completionist/Completionist_Map-1.0.3.zip`（Thunderstore
+  `Yoraiz0r/Completionist_Map/1.0.3`）生成 `collectibles.gen.h`（gitignore）。增量
+  构建不会重新评估 `__has_include`，新增/删除该头文件后要 `make -C exl clean`。
 
 ---
 
